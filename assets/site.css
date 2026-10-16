@@ -42,3 +42,6 @@ footer{margin-top:72px;color:var(--muted);font-size:13px}
 .topic h2{margin:0 0 6px;font-size:22px}
 .topic p{margin:0;color:var(--muted)}
 .topic .meta{margin-top:10px;font-size:13px;color:var(--muted)}
+.formula p{margin:6px 0 0;color:var(--muted);font-size:14px}
+.formula .katex-display{margin:6px 0}
+.katex{font-size:1.08em}

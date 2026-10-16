@@ -3,67 +3,62 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Triangulation and simple stereo · CV notes</title>
 <meta name="description" content="Interactive notes: triangulation, disparity, stereo matching and 3D reconstruction.">
-<link rel="stylesheet" href="../assets/site.css"></head>
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/auto-render.min.js" onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'\\(',right:'\\)',display:false}],throwOnError:false})"></script></head>
 <body><div class="layout">
-<nav aria-label="Sections"><a class="back" href="../">All topics</a><ol><li><a href="#rays">One ray vs two rays</a></li><li><a href="#baseline">Why a wider baseline is better</a></li><li><a href="#triangles">From pixels to metres</a></li><li><a href="#window">The matching window</a></li><li><a href="#metrics">Comparing windows: SAD, SSD, NCC</a></li><li><a href="#scanline">One row, step by step</a></li><li><a href="#argmin">From costs to a disparity map</a></li><li><a href="#fullmap">Every pixel has its own d</a></li><li><a href="#pixel3d">One pixel to a 3D point</a></li><li><a href="#cloud">The point cloud</a></li><li><a href="#vshift">When the camera is also shifted in y</a></li></ol></nav>
+<nav aria-label="Sections"><a class="back" href="../">All topics</a><ol><li><a href="#rays">One ray vs two rays</a></li><li><a href="#baseline">Why a wider baseline is better</a></li><li><a href="#window">The matching window</a></li><li><a href="#metrics">Comparing windows: SAD, SSD, NCC</a></li><li><a href="#scanline">One row, step by step</a></li><li><a href="#argmin">From costs to a disparity map</a></li><li><a href="#fullmap">Every pixel has its own d</a></li><li><a href="#vshift">When the camera is also shifted in y</a></li></ol></nav>
 <main>
 <header class="top"><h1>Triangulation and simple stereo</h1>
-<p>Depth from two cameras with known or partly known parameters: rays, disparity, window matching, the disparity map, and turning every pixel into a 3D point.</p>
+<p>Depth from two cameras with known or partly known parameters: rays, disparity, window matching, the disparity map, and following a pixel to its 3D point.</p>
 <div class="legend"><span style="color:var(--left)">left camera</span><span style="color:var(--right)">right camera</span><span style="color:var(--match)">best match</span></div>
 </header>
 <section id="rays">
 <div class="sec-head"><h2><span class="n">1</span>One ray vs two rays</h2><button class="copy" data-id="rays">Copy link</button></div>
-<p class="lead">A calibrated camera turns a pixel into a ray: the point lies somewhere on it, but the depth is unknown. A second camera, shifted sideways by the baseline <i>b</i>, gives a second ray. The two rays intersect at the 3D point. This is triangulation.</p>
+<p class="lead">A calibrated camera turns a pixel into a ray: the point lies somewhere on it, but the depth is unknown. A second camera, shifted sideways by the baseline \(b\), gives a second ray. The two rays intersect at the 3D point. This is triangulation.</p>
 <div class="frame"><iframe src="w/rays.html" title="One ray vs two rays" loading="lazy"></iframe>
 <a class="open" href="w/rays.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
-</section><section id="baseline">
+</section>
+<section id="baseline">
 <div class="sec-head"><h2><span class="n">2</span>Why a wider baseline is better</h2><button class="copy" data-id="baseline">Copy link</button></div>
-<p class="lead">Every pixel measurement has a small error, so each ray is really a thin wedge. The orange region is where the point can be. With a small baseline the wedges cross at a shallow angle and depth is uncertain; with a large baseline the region shrinks.</p><div class="formula">d = b·f<sub>x</sub> / z &nbsp;→&nbsp; larger b gives larger d, so a 1-pixel error matters less</div>
+<p class="lead">Every pixel measurement has a small error, so each ray is really a thin wedge. The orange region is where the point can be. With a small baseline the wedges cross at a shallow angle and depth is uncertain; with a large baseline the region shrinks.</p><div class="formula">$$d = \frac{b\,f_x}{z}$$<p>Larger \(b\) gives a larger \(d\), so a 1-pixel error matters less.</p></div>
 <div class="frame"><iframe src="w/baseline.html" title="Why a wider baseline is better" loading="lazy"></iframe>
 <a class="open" href="w/baseline.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
-</section><section id="triangles">
-<div class="sec-head"><h2><span class="n">3</span>From pixels to metres</h2><button class="copy" data-id="triangles">Copy link</button></div>
-<p class="lead">Shift the right ray so it passes through the left pinhole. The large triangle (base <i>b</i>, height <i>z</i>) and the small one on the sensor (base Δ, height <i>f</i>) are similar. Matching measures the shift in pixels; the pixel density m<sub>x</sub> turns it into millimetres, and it is hidden inside f<sub>x</sub>.</p><div class="formula">b / z = Δ / f, &nbsp; d = m<sub>x</sub>·Δ &nbsp;⟹&nbsp; z = (m<sub>x</sub> f)·b / d = f<sub>x</sub>·b / d</div>
-<div class="frame"><iframe src="w/triangles.html" title="From pixels to metres" loading="lazy"></iframe>
-<a class="open" href="w/triangles.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
-</section><section id="window">
-<div class="sec-head"><h2><span class="n">4</span>The matching window</h2><button class="copy" data-id="window">Copy link</button></div>
+</section>
+<section id="window">
+<div class="sec-head"><h2><span class="n">3</span>The matching window</h2><button class="copy" data-id="window">Copy link</button></div>
 <p class="lead">One pixel is a single brightness value and is not unique along the row. So we take the pixel together with its neighbours. The window's values form a fingerprint of the centre pixel. Like a CNN kernel it gathers neighbours and the result belongs to the centre pixel, but there are no learned weights: the left window is compared with right windows.</p>
 <div class="frame"><iframe src="w/window.html" title="The matching window" loading="lazy"></iframe>
 <a class="open" href="w/window.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
-</section><section id="metrics">
-<div class="sec-head"><h2><span class="n">5</span>Comparing windows: SAD, SSD, NCC</h2><button class="copy" data-id="metrics">Copy link</button></div>
-<p class="lead">Move the shift slider and watch the three metrics. Then switch on the brightness change: SSD can pick the wrong shift, while NCC still finds the right one because it compares the pattern's shape, not its absolute brightness.</p><div class="formula">SAD = Σ|W<sub>l</sub> − W<sub>r</sub>| (min) &nbsp;·&nbsp; SSD = Σ(W<sub>l</sub> − W<sub>r</sub>)² (min) &nbsp;·&nbsp; NCC ∈ [−1, 1] (max)</div>
+</section>
+<section id="metrics">
+<div class="sec-head"><h2><span class="n">4</span>Comparing windows: SAD, SSD, NCC</h2><button class="copy" data-id="metrics">Copy link</button></div>
+<p class="lead">Move the shift slider and watch the three metrics. Then switch on the brightness change: SSD can pick the wrong shift, while NCC still finds the right one because it compares the pattern's shape, not its absolute brightness.</p><div class="formula">$$\mathrm{SAD}(d) = \sum_{(i,j)\in W} \bigl|\,I_l(u+i,\,v+j) - I_r(u+i-d,\,v+j)\,\bigr| \quad\text{(min)}$$$$\mathrm{SSD}(d) = \sum_{(i,j)\in W} \bigl(I_l(u+i,\,v+j) - I_r(u+i-d,\,v+j)\bigr)^2 \quad\text{(min)}$$$$\mathrm{NCC}(d) = \frac{\sum \bigl(W_l - \bar W_l\bigr)\bigl(W_r - \bar W_r\bigr)}{\sqrt{\sum \bigl(W_l - \bar W_l\bigr)^2}\,\sqrt{\sum \bigl(W_r - \bar W_r\bigr)^2}} \in [-1,\,1] \quad\text{(max)}$$<p>\(W_l\) is the left window, \(W_r\) the right window shifted by \(d\), \(\bar W\) the mean of a window.</p></div>
 <div class="frame"><iframe src="w/metrics.html" title="Comparing windows: SAD, SSD, NCC" loading="lazy"></iframe>
 <a class="open" href="w/metrics.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
-</section><section id="scanline">
-<div class="sec-head"><h2><span class="n">6</span>One row, step by step</h2><button class="copy" data-id="scanline">Copy link</button></div>
-<p class="lead">This is the actual loop. For one pixel the window slides over every shift <i>d</i> along the same row, each shift gives one cost, the smallest wins, and its index is written into the map. Then the next pixel in the row, then the next row.</p><div class="formula">d* = argmin<sub>d</sub> C(u, v, d), &nbsp; map[v, u] = d*</div>
+</section>
+<section id="scanline">
+<div class="sec-head"><h2><span class="n">5</span>One row, step by step</h2><button class="copy" data-id="scanline">Copy link</button></div>
+<p class="lead">This is the actual loop. For one pixel the window slides over every shift \(d\) along the same row, each shift gives one cost, the smallest wins, and its index is written into the map. Then the next pixel in the row, then the next row.</p><div class="formula">$$d^{*}(u,v) = \arg\min_{d}\; C(u,\,v,\,d), \qquad D[v,\,u] = d^{*}$$</div>
 <div class="frame"><iframe src="w/scanline.html" title="One row, step by step" loading="lazy"></iframe>
 <a class="open" href="w/scanline.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
-</section><section id="argmin">
-<div class="sec-head"><h2><span class="n">7</span>From costs to a disparity map</h2><button class="copy" data-id="argmin">Copy link</button></div>
-<p class="lead">Click any pixel to see its cost bars and the winning shift. Run it on every pixel to watch the full map appear, including the typical errors: borders where the window does not fit, the left edge, and occlusion next to the box.</p><div class="formula">z = b·f / d*</div>
+</section>
+<section id="argmin">
+<div class="sec-head"><h2><span class="n">6</span>From costs to a disparity map</h2><button class="copy" data-id="argmin">Copy link</button></div>
+<p class="lead">Click any pixel to see its cost bars and the winning shift. Run it on every pixel to watch the full map appear, including the typical errors: borders where the window does not fit, the left edge, and occlusion next to the box.</p><div class="formula">$$z = \frac{b\,f_x}{d^{*}}$$</div>
 <div class="frame"><iframe src="w/argmin.html" title="From costs to a disparity map" loading="lazy"></iframe>
 <a class="open" href="w/argmin.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
-</section><section id="fullmap">
-<div class="sec-head"><h2><span class="n">8</span>Every pixel has its own d</h2><button class="copy" data-id="fullmap">Copy link</button></div>
-<p class="lead">The whole image becomes a map with one disparity per pixel. Toggle to the depth map and click a pixel to follow it all the way to a 3D point. The formulas are the same for every pixel; only u, v and d change.</p>
+</section>
+<section id="fullmap">
+<div class="sec-head"><h2><span class="n">7</span>Every pixel has its own d</h2><button class="copy" data-id="fullmap">Copy link</button></div>
+<p class="lead">The whole image becomes a map with one disparity per pixel. Toggle to the depth map and click a pixel to follow it all the way to a 3D point. The formulas are the same for every pixel; only \(u\), \(v\) and \(d\) change.</p>
 <div class="frame"><iframe src="w/fullmap.html" title="Every pixel has its own d" loading="lazy"></iframe>
 <a class="open" href="w/fullmap.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
-</section><section id="pixel3d">
-<div class="sec-head"><h2><span class="n">9</span>One pixel to a 3D point</h2><button class="copy" data-id="pixel3d">Copy link</button></div>
-<p class="lead">Arrows link each left pixel to its match in the right image on the same row. The horizontal length of an arrow is the disparity: long means near, short means far. Click a pixel to compute its x, y and z with real numbers.</p><div class="formula">z = b·f<sub>x</sub>/d, &nbsp; x = b(u − o<sub>x</sub>)/d, &nbsp; y = b·f<sub>x</sub>(v − o<sub>y</sub>)/(f<sub>y</sub>·d)</div>
-<div class="frame"><iframe src="w/pixel3d.html" title="One pixel to a 3D point" loading="lazy"></iframe>
-<a class="open" href="w/pixel3d.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
-</section><section id="cloud">
-<div class="sec-head"><h2><span class="n">10</span>The point cloud</h2><button class="copy" data-id="cloud">Copy link</button></div>
-<p class="lead">Every pixel with a valid disparity becomes one 3D point, relative to the left camera. Drag to rotate. The box sits in front of the wall, and the wall has a hole where the box hides it. Wrong disparities become stray points, which is why they are filtered first.</p>
-<div class="frame"><iframe src="w/cloud.html" title="The point cloud" loading="lazy"></iframe>
-<a class="open" href="w/cloud.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
-</section><section id="vshift">
-<div class="sec-head"><h2><span class="n">11</span>When the camera is also shifted in y</h2><button class="copy" data-id="vshift">Copy link</button></div>
-<p class="lead">If the right camera is shifted vertically too, the match leaves the row and lies on a slanted line. With a known b<sub>y</sub> we search along that line. With an unknown b<sub>y</sub> we first match a few strong points in 2D, read the direction from their parallel arrows, estimate b<sub>y</sub>, and then search along the estimated line.</p><div class="formula">(v<sub>l</sub> − v<sub>r</sub>) / (u<sub>l</sub> − u<sub>r</sub>) = f<sub>y</sub> b<sub>y</sub> / (f<sub>x</sub> b<sub>x</sub>), &nbsp; z = f<sub>x</sub> b<sub>x</sub> / (u<sub>l</sub> − u<sub>r</sub>)</div>
+</section>
+<section id="vshift">
+<div class="sec-head"><h2><span class="n">8</span>When the camera is also shifted in y</h2><button class="copy" data-id="vshift">Copy link</button></div>
+<p class="lead">If the right camera is shifted vertically too, the match leaves the row and lies on a slanted line. With a known \(b_y\) we search along that line. With an unknown \(b_y\) we first match a few strong points in 2D, read the direction from their parallel arrows, estimate \(b_y\), and then search along the estimated line.</p><div class="formula">$$\frac{v_l - v_r}{u_l - u_r} = \frac{f_y\,b_y}{f_x\,b_x}, \qquad z = \frac{f_x\,b_x}{u_l - u_r}$$</div>
 <div class="frame"><iframe src="w/vshift.html" title="When the camera is also shifted in y" loading="lazy"></iframe>
 <a class="open" href="w/vshift.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
 </section>
