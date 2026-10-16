@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>One row, step by step</title>
+<style>
+:root{--text-primary:#18202B;--text-secondary:#5B6573;--text-success:#0F6E56;--surface-1:#EDF0F3;--surface-2:#E2E6EB;
+--border-subtle:rgba(24,32,43,.12);--border-strong:rgba(24,32,43,.30);--radius:8px;--radius-lg:12px;
+--font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--text-primary:#E6EAF0;--text-secondary:#9AA4B2;--text-success:#5DCAA5;
+--surface-1:#1E2631;--surface-2:#27303C;--border-subtle:rgba(230,234,240,.12);--border-strong:rgba(230,234,240,.32);color-scheme:dark}}
+html,body{margin:0;background:transparent}
+body{font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--text-primary);padding:4px 2px;overflow-x:auto}
+p{margin:0 0 6px}
+button{font:inherit;font-size:13px;padding:6px 12px;border-radius:var(--radius);border:1px solid var(--border-subtle);
+background:transparent;color:var(--text-primary);cursor:pointer}
+button:hover{background:var(--surface-1)}
+button:focus-visible,input:focus-visible{outline:2px solid #2F6FDE;outline-offset:2px}
+input[type=range]{accent-color:#2F6FDE}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+svg text{font-family:inherit}
+.th{font-size:14px;font-weight:500;fill:var(--text-primary)}
+.ts{font-size:12px;fill:var(--text-secondary)}
+.c-purple,.c-purple rect,.c-purple polygon{fill:#EEEDFE;stroke:#534AB7}
+.c-purple text{fill:#3C3489;stroke:none}
+.c-coral,.c-coral rect{fill:#FAECE7;stroke:#993C1D}
+.c-coral text{fill:#712B13;stroke:none}
+@media (prefers-color-scheme:dark){
+.c-purple,.c-purple rect,.c-purple polygon{fill:#3C3489;stroke:#AFA9EC}
+.c-purple text{fill:#EEEDFE}
+.c-coral,.c-coral rect{fill:#712B13;stroke:#F0997B}
+.c-coral text{fill:#FAECE7}}
+</style></head>
+<body>
+<style>
+.band{display:grid;grid-template-columns:repeat(20,26px);gap:1px}
+.band div{width:26px;height:26px}
+.strip{display:grid;grid-template-columns:repeat(20,26px);gap:1px}
+.strip div{width:26px;height:26px;font-size:12px;display:flex;align-items:center;justify-content:center;background:var(--surface-1);color:var(--text-primary)}
+.thm{display:grid;grid-template-columns:repeat(20,8px);gap:1px}
+.thm div{width:8px;height:8px;background:var(--surface-1)}
+.lb{font-size:13px;color:var(--text-secondary);margin:0 0 4px}
+.bars{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;align-items:end;height:80px}
+.bars div{border-radius:3px 3px 0 0;background:var(--border-strong)}
+</style>
+<h2 class="sr-only">Step-by-step stereo matching along a single scanline: for one pixel the window is slid over every shift, the minimum SSD is picked, written into the disparity row, and then the next pixel is processed.</h2>
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin:0.25rem 0 0.75rem">
+<button id="bs">Step</button><button id="ba">Auto</button><button id="bf">Finish row</button><button id="br">Reset</button>
+</div>
+<p id="status" style="font-size:15px;font-weight:500;margin:0 0 12px;min-height:22px"></p>
+<p class="lb">left image, rows v−1…v+1 (window fixed on the current pixel)</p>
+<div class="band" id="L"></div>
+<p class="lb" style="margin-top:10px">right image, same rows (window slides left by d)</p>
+<div class="band" id="R"></div>
+<div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;margin-top:14px;align-items:end">
+<div><p class="lb">SSD for each tried shift d (current pixel)</p><div class="bars" id="bars"></div>
+<div style="display:grid;grid-template-columns:repeat(8,1fr);gap:6px" id="bl"></div></div>
+<div><p class="lb">whole map: only row v fills</p><div class="thm" id="thm"></div></div>
+</div>
+<p class="lb" style="margin-top:14px">disparity map, row v (one number per pixel)</p>
+<div class="strip" id="S"></div>
+<script>
+const H=10,W=20,D=7,r=1,V=4,FB=20;
+let s=11;const rn=()=>{s=(s*1103515245+12345)%2147483648;return 25+Math.floor(s/2147483648*200)};
+const BG=[],BX=[];for(let v=0;v<H;v++){BG.push([]);BX.push([]);for(let u=0;u<W+12;u++){BG[v].push(rn());BX[v].push(rn())}}
+const inb=(v,u)=>v>=3&&v<=6&&u>=8&&u<=13;
+const Li=[],Ri=[];for(let v=0;v<H;v++){Li.push([]);Ri.push([]);for(let u=0;u<W;u++){Li[v].push(inb(v,u)?BX[v][u]:BG[v][u]);Ri[v].push(inb(v,u+5)?BX[v][u+5]:BG[v][u+2])}}
+const ssd=(u,d)=>{let t=0;for(let i=-r;i<=r;i++)for(let j=-r;j<=r;j++){const e=Li[V+i][u+j]-Ri[V+i][u-d+j];t+=e*e}return t};
+const PAL=['#EEEDFE','#CECBF6','#AFA9EC','#9C94E6','#7F77DD','#534AB7','#3C3489','#26215C'];
+const Lc=[],Rc=[],Sc=[],Tc=[];
+const mk=(id,arr,I)=>{const el=document.getElementById(id);for(let i=-1;i<=1;i++)for(let u=0;u<W;u++){const c=document.createElement('div');const g=I[V+i][u];c.style.background=`rgb(${g},${g},${g})`;el.appendChild(c);arr.push(c)}};
+mk('L',Lc,Li);mk('R',Rc,Ri);
+for(let u=0;u<W;u++){const c=document.createElement('div');document.getElementById('S').appendChild(c);Sc.push(c)}
+for(let v=0;v<H;v++)for(let u=0;u<W;u++){const c=document.createElement('div');document.getElementById('thm').appendChild(c);Tc.push(c)}
+let u,d,costs,phase,best,row,timer=null;
+function reset(){u=r;d=-1;costs=Array(D+1).fill(undefined);phase='slide';best=-1;row=Array(W).fill(undefined);stop();render()}
+function win(cells,uc,col,w){cells.forEach(c=>c.style.outline='none');if(uc===null)return;for(let i=0;i<3;i++)for(let j=-1;j<=1;j++){const x=uc+j;if(x<0||x>=W)continue;const c=cells[i*W+x];c.style.outline=`${w}px solid ${col}`;c.style.outlineOffset=`-${w}px`}}
+function render(){
+win(Lc,phase==='done'?null:u,'#7F77DD',2);
+if(phase==='done')win(Rc,null);else if(best>=0)win(Rc,u-best,'#1D9E75',3);else if(d>=0)win(Rc,u-d,'#888780',2);else win(Rc,null);
+const valid=costs.filter(x=>x!==undefined&&x!==null);const mx=valid.length?Math.max(...valid):1;
+document.getElementById('bars').innerHTML=costs.map((x,i)=>x===undefined||x===null?'<div style="height:0"></div>':`<div style="height:${Math.max(3,Math.round(x/mx*76))}px;${i===best?'background:#1D9E75;':''}${i===d&&best<0?'outline:2px solid #7F77DD;outline-offset:1px;':''}"></div>`).join('');
+document.getElementById('bl').innerHTML=costs.map((x,i)=>`<div style="font-size:11px;text-align:center;color:${i===best?'var(--text-success)':'var(--text-secondary)'}">${x===null?'–':i}</div>`).join('');
+Sc.forEach((c,i)=>{const v=row[i];if(i<r||i>=W-r){c.style.background='var(--border-strong)';c.textContent='';}else if(v===undefined){c.style.background='var(--surface-1)';c.textContent='';}else{c.style.background=PAL[v];c.style.color=v>=4?'#EEEDFE':'#26215C';c.textContent=v}
+c.style.outline=(phase!=='done'&&i===u)?'2px solid #D85A30':'none';c.style.outlineOffset='-2px'});
+Tc.forEach((c,k)=>{const vv=Math.floor(k/W),uu=k%W;c.style.background=vv===V?(row[uu]!==undefined?PAL[row[uu]]:'var(--border-strong)'):'var(--surface-1)'});
+const st=document.getElementById('status');
+if(phase==='done')st.textContent='Row finished. The same loop now runs for row v+1, v+2, … until the whole map is filled.';
+else if(phase==='slide')st.textContent=d<0?`Pixel u = ${u}: start sliding the window over d = 0…${D}`:`Pixel u = ${u}: trying shift d = ${d}`+(costs[d]===null?' (outside the right image, skipped)':`, SSD = ${costs[d].toLocaleString()}`);
+else if(phase==='pick')st.textContent=`Pixel u = ${u}: all shifts tried. Next step picks the smallest SSD.`;
+else st.textContent=`Pixel u = ${u}: d* = ${best} written to map[v, ${u}], depth z = ${best>0?(FB/best).toFixed(1)+' m':'∞'}`;
+}
+function step(){
+if(phase==='slide'){d++;costs[d]=(u-d-r<0)?null:ssd(u,d);if(d===D)phase='pick'}
+else if(phase==='pick'){let b=-1;costs.forEach((x,i)=>{if(x!==null&&x!==undefined&&(b<0||x<costs[b]))b=i});best=b;row[u]=b;phase='write'}
+else if(phase==='write'){u++;if(u>=W-r){phase='done';stop()}else{d=-1;costs=Array(D+1).fill(undefined);best=-1;phase='slide'}}
+render()}
+function stop(){if(timer){clearInterval(timer);timer=null}document.getElementById('ba').textContent='Auto'}
+document.getElementById('bs').onclick=()=>{stop();if(phase!=='done')step()};
+document.getElementById('ba').onclick=()=>{if(timer){stop();return}if(phase==='done')return;document.getElementById('ba').textContent='Pause';timer=setInterval(()=>{if(phase==='done'){stop();return}step()},220)};
+document.getElementById('bf').onclick=()=>{stop();let g=0;while(phase!=='done'&&g<5000){step();g++}};
+document.getElementById('br').onclick=reset;
+reset();
+</script>
+
+<script>
+(function(){function post(){parent.postMessage({cvNotesHeight:document.documentElement.scrollHeight},'*')}
+addEventListener('load',post);if(window.ResizeObserver)new ResizeObserver(post).observe(document.body);setTimeout(post,300);})();
+</script>
+</body></html>

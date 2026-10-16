@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>When the camera is also shifted in y</title>
+<style>
+:root{--text-primary:#18202B;--text-secondary:#5B6573;--text-success:#0F6E56;--surface-1:#EDF0F3;--surface-2:#E2E6EB;
+--border-subtle:rgba(24,32,43,.12);--border-strong:rgba(24,32,43,.30);--radius:8px;--radius-lg:12px;
+--font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--text-primary:#E6EAF0;--text-secondary:#9AA4B2;--text-success:#5DCAA5;
+--surface-1:#1E2631;--surface-2:#27303C;--border-subtle:rgba(230,234,240,.12);--border-strong:rgba(230,234,240,.32);color-scheme:dark}}
+html,body{margin:0;background:transparent}
+body{font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--text-primary);padding:4px 2px;overflow-x:auto}
+p{margin:0 0 6px}
+button{font:inherit;font-size:13px;padding:6px 12px;border-radius:var(--radius);border:1px solid var(--border-subtle);
+background:transparent;color:var(--text-primary);cursor:pointer}
+button:hover{background:var(--surface-1)}
+button:focus-visible,input:focus-visible{outline:2px solid #2F6FDE;outline-offset:2px}
+input[type=range]{accent-color:#2F6FDE}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+svg text{font-family:inherit}
+.th{font-size:14px;font-weight:500;fill:var(--text-primary)}
+.ts{font-size:12px;fill:var(--text-secondary)}
+.c-purple,.c-purple rect,.c-purple polygon{fill:#EEEDFE;stroke:#534AB7}
+.c-purple text{fill:#3C3489;stroke:none}
+.c-coral,.c-coral rect{fill:#FAECE7;stroke:#993C1D}
+.c-coral text{fill:#712B13;stroke:none}
+@media (prefers-color-scheme:dark){
+.c-purple,.c-purple rect,.c-purple polygon{fill:#3C3489;stroke:#AFA9EC}
+.c-purple text{fill:#EEEDFE}
+.c-coral,.c-coral rect{fill:#712B13;stroke:#F0997B}
+.c-coral text{fill:#FAECE7}}
+</style></head>
+<body>
+<style>
+.lb{font-size:13px;color:var(--text-secondary);margin:0 0 4px}
+.on{border-color:var(--border-strong)!important;background:var(--surface-1)!important}
+.bars{display:grid;grid-template-columns:repeat(13,1fr);gap:4px;align-items:end;height:70px}
+.bars div{border-radius:2px 2px 0 0;background:var(--border-strong)}
+.blab{display:grid;grid-template-columns:repeat(13,1fr);gap:4px}
+.blab div{font-size:10px;text-align:center;color:var(--text-secondary)}
+.eq{font-family:var(--font-mono);font-size:13px;margin:0 0 5px;line-height:1.5}
+.hm{display:grid;grid-template-columns:repeat(13,12px);gap:1px}
+.hm div{width:12px;height:12px}
+table{border-collapse:collapse;font-size:12px;width:100%}
+td,th{padding:3px 6px;text-align:right;border-bottom:0.5px solid var(--border-subtle)}
+th{font-weight:500;color:var(--text-secondary)}
+</style>
+<h2 class="sr-only">Two stereo cases with a vertical camera shift. Case 1: the vertical shift is known, so the match is searched along a known slanted line. Case 2: the vertical shift is unknown, so a 2D search on a few strong points estimates it, and then the 1D search along the estimated line is used.</h2>
+<div style="display:flex;gap:8px;margin:0.25rem 0 12px;flex-wrap:wrap">
+<button id="t1" class="on">Case 1: b_y known</button><button id="t2">Case 2: b_y unknown</button>
+</div>
+<div id="c1">
+<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+<span class="lb" style="margin:0">vertical shift b_y =</span>
+<button data-r="0">0 m</button><button data-r="0.25">0.03 m</button><button data-r="0.5" class="on">0.06 m</button><button data-r="0.75">0.09 m</button>
+<span class="lb" style="margin:0 0 0 6px">(b_x = 0.12 m, click a pixel on the left)</span>
+</div>
+</div>
+<div id="c2" style="display:none">
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+<button id="s1" class="on">1. Try a 2D search</button><button id="s2">2. Match strong points</button><button id="s3">3. Search along the estimated line</button>
+</div>
+</div>
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px">
+<div><p class="lb">left image</p><canvas id="cl" style="width:280px;height:196px;cursor:crosshair"></canvas></div>
+<div><p class="lb">right image</p><canvas id="cr" style="width:280px;height:196px"></canvas></div>
+</div>
+<div id="p1" style="margin-top:12px">
+<p class="lb">SSD along the search line (k = shift in u)</p>
+<div class="bars" id="bars"></div><div class="blab" id="blab"></div>
+<div style="background:var(--surface-1);border-radius:var(--radius-lg);padding:12px 14px;margin-top:10px" id="ro"></div>
+</div>
+<div id="p2" style="margin-top:12px;display:none"></div>
+<script>
+const W=40,H=28,C=7,FBX=48,BX=0.12,RTRUE=0.5;
+const OB={u0:14,u1:25,v0:9,v1:18};
+const hs=(s,u,v)=>{let h=(u*374761393+v*668265263+s*1442695041)|0;h=Math.imul(h^(h>>>13),1274126177);h=h^(h>>>16);return 30+((h>>>0)%190)};
+const inO=(u,v)=>u>=OB.u0&&u<=OB.u1&&v>=OB.v0&&v<=OB.v1;
+const Lp=(u,v)=>inO(u,v)?hs(2,u,v):hs(1,u,v);
+const Rp=(u,v,r)=>inO(u+8,v+8*r)?hs(2,u+8,v+8*r):hs(1,u+4,v+4*r);
+const ssd=(u,v,kx,ky,r)=>{let t=0;for(let i=-2;i<=2;i++)for(let j=-2;j<=2;j++){const e=Lp(u+j,v+i)-Rp(u-kx+j,v-ky+i,r);t+=e*e}return t};
+const ok=(u,v,kx,ky)=>u-kx-2>=0&&v-ky-2>=0&&v-ky+2<H&&u+2<W&&v-2>=0&&v+2<H;
+const dpr=window.devicePixelRatio||1;
+const setup=id=>{const c=document.getElementById(id);c.width=280*dpr;c.height=196*dpr;const x=c.getContext('2d');x.scale(dpr,dpr);return x};
+const L=setup('cl'),R=setup('cr');
+function img(ctx,f){for(let v=0;v<H;v++)for(let u=0;u<W;u++){const g=f(u,v);ctx.fillStyle=`rgb(${g},${g},${g})`;ctx.fillRect(u*C,v*C,C,C)}}
+function box(ctx,u,v,rad,col,lw,dash){ctx.save();ctx.strokeStyle=col;ctx.lineWidth=lw;ctx.setLineDash(dash||[]);ctx.strokeRect((u-rad)*C,(v-rad)*C,(2*rad+1)*C,(2*rad+1)*C);ctx.restore()}
+function seg(ctx,u0,v0,u1,v1,col,lw,dash){ctx.save();ctx.strokeStyle=col;ctx.lineWidth=lw;ctx.setLineDash(dash||[]);ctx.beginPath();ctx.moveTo((u0+.5)*C,(v0+.5)*C);ctx.lineTo((u1+.5)*C,(v1+.5)*C);ctx.stroke();ctx.restore()}
+function arrow(ctx,u0,v0,u1,v1,col){seg(ctx,u0,v0,u1,v1,col,2);const a=Math.atan2(v1-v0,u1-u0),x=(u1+.5)*C,y=(v1+.5)*C;ctx.save();ctx.fillStyle=col;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-7*Math.cos(a-.5),y-7*Math.sin(a-.5));ctx.lineTo(x-7*Math.cos(a+.5),y-7*Math.sin(a+.5));ctx.fill();ctx.restore()}
+function dot(ctx,u,v,col){ctx.save();ctx.fillStyle=col;ctx.beginPath();ctx.arc((u+.5)*C,(v+.5)*C,3.5,0,7);ctx.fill();ctx.restore()}
+let tab=1,r1=0.5,px=[20,14],anim=null,cur=-1,step=1,rhat=null;
+const FEAT=[[16,10],[20,14],[24,17],[30,9],[35,15],[33,19],[15,19],[27,12]];
+function lineSearch(u,v,r){const c=[];for(let k=0;k<=12;k++){const ky=Math.round(k*r);c.push(ok(u,v,k,ky)?ssd(u,v,k,ky,(tab===1)?r1:RTRUE):null)}let b=-1;c.forEach((x,i)=>{if(x!==null&&(b<0||x<c[b]))b=i});return{c,b}}
+function search2D(u,v,r){let best=null;const grid=[];for(let ky=-6;ky<=6;ky++){const row=[];for(let kx=0;kx<=12;kx++){const x=ok(u,v,kx,ky)?ssd(u,v,kx,ky,r):null;row.push(x);if(x!==null&&(!best||x<best.c))best={kx,ky,c:x}}grid.push(row)}return{grid,best}}
+function bars(c,b,curk){const vals=c.filter(x=>x!==null),mx=Math.max(...vals,1);
+document.getElementById('bars').innerHTML=c.map((x,i)=>x===null?'<div style="height:0"></div>':`<div style="height:${Math.max(3,Math.round(x/mx*66))}px;${i===b&&curk<0?'background:#1D9E75;':''}${i===curk?'outline:2px solid #7F77DD;outline-offset:1px;':''}"></div>`).join('');
+document.getElementById('blab').innerHTML=c.map((x,i)=>`<div>${x===null?'–':i}</div>`).join('')}
+function runLine(r,label){if(anim)clearInterval(anim);const [u,v]=px;const res=lineSearch(u,v,r);cur=0;
+const scene=(tab===1)?r1:RTRUE;
+const frame=()=>{img(L,Lp);img(R,(a,b)=>Rp(a,b,scene));
+box(L,u,v,2,'#7F77DD',2);dot(L,u,v,'#D85A30');
+seg(R,u,v,u-12,v-Math.round(12*r),'#1D9E75',1.5,[4,3]);dot(R,u,v,'rgba(216,90,48,0.6)');
+if(cur>=0&&cur<=12){const ky=Math.round(cur*r);if(res.c[cur]!==null)box(R,u-cur,v-ky,2,'#888780',1.5)}
+else{const ky=Math.round(res.b*r);box(R,u-res.b,v-ky,2,'#1D9E75',2.5)}
+bars(res.c,res.b,cur>12?-1:cur);
+const k=res.b,ky=Math.round(k*r),z=FBX/k;
+document.getElementById('ro').innerHTML=cur<=12?`<p class="eq">sliding the window along the line… k = ${cur}</p>`:
+`<p class="eq">${label}</p><p class="eq">best k = ${k}: u-shift u_l − u_r = ${k} px, v-shift v_l − v_r = ${ky} px</p><p class="eq">z = f·b_x / (u_l − u_r) = 48 / ${k} = <b style="font-weight:500">${z.toFixed(1)} m</b></p>`+(ky?`<p class="eq">check: z = f·b_y / (v_l − v_r) = ${(FBX*r).toFixed(0)} / ${ky} = ${(FBX*r/ky).toFixed(1)} m</p>`:'')};
+anim=setInterval(()=>{frame();cur++;if(cur>13){clearInterval(anim);anim=null;cur=99;frame()}},90)}
+function case1(){runLine(r1,`known line slope: (v_l − v_r)/(u_l − u_r) = b_y/b_x = ${(r1*BX).toFixed(2)}/0.12 = ${r1}`)}
+function case2(){if(anim){clearInterval(anim);anim=null}const p2=document.getElementById('p2');
+img(L,Lp);img(R,(a,b)=>Rp(a,b,RTRUE));
+if(step===1){const [u,v]=px;const s=search2D(u,v,RTRUE);box(L,u,v,2,'#7F77DD',2);dot(L,u,v,'#D85A30');
+R.save();R.strokeStyle='#E24B4A';R.lineWidth=1.5;R.setLineDash([4,3]);R.strokeRect((u-12)*C,(v-6)*C,13*C,13*C);R.restore();
+box(R,u-s.best.kx,v-s.best.ky,2,'#1D9E75',2.5);
+const vals=s.grid.flat().filter(x=>x!==null),mn=Math.min(...vals),mx=Math.max(...vals);
+let hm='';s.grid.forEach((row,iy)=>row.forEach((x,ix)=>{const t=x===null?1:Math.sqrt((x-mn)/(mx-mn));const isB=ix===s.best.kx&&iy-6===s.best.ky;
+hm+=`<div style="background:${x===null?'var(--surface-1)':isB?'#1D9E75':`rgba(29,158,117,${(1-t).toFixed(2)})`}"></div>`}));
+p2.innerHTML=`<div style="display:grid;grid-template-columns:auto minmax(0,1fr);gap:18px;align-items:start"><div><p class="lb">SSD for every (k_x, k_y)</p><div class="hm">${hm}</div><p class="lb" style="margin-top:4px">k_x → , k_y ↓ (−6…6)</p></div>
+<div style="background:var(--surface-1);border-radius:var(--radius-lg);padding:12px 14px"><p class="eq">direction unknown → search the whole red area</p><p class="eq">13 × 13 = 169 window comparisons (vs 13 on a line)</p><p class="eq">best: k_x = ${s.best.kx}, k_y = ${s.best.ky}</p><p class="eq">works, but slow and easier to fool on weak texture</p></div></div>`}
+if(step===2){let rows='',sum=0;FEAT.forEach(([u,v],i)=>{const s=search2D(u,v,RTRUE);dot(L,u,v,'#D85A30');arrow(R,u,v,u-s.best.kx,v-s.best.ky,'#D85A30');const rt=s.best.ky/s.best.kx;sum+=rt;
+rows+=`<tr><td>${i+1}</td><td>(${u}, ${v})</td><td>${s.best.kx}</td><td>${s.best.ky}</td><td>${rt.toFixed(2)}</td><td>${(rt*BX).toFixed(3)} m</td></tr>`});
+rhat=sum/FEAT.length;
+p2.innerHTML=`<p class="lb">2D search only on 8 strong points → displacement arrows on the right image</p><table><tr><th>#</th><th>(u, v)</th><th>k_x</th><th>k_y</th><th>k_y / k_x</th><th>b_y = ratio · 0.12</th></tr>${rows}</table>
+<div style="background:var(--surface-1);border-radius:var(--radius-lg);padding:12px 14px;margin-top:10px"><p class="eq">all arrows are parallel: same direction = the baseline direction</p><p class="eq">lengths differ: long = near (object), short = far (background)</p><p class="eq">estimated b_y = mean ratio · b_x = ${rhat.toFixed(2)} · 0.12 = <b style="font-weight:500">${(rhat*BX).toFixed(3)} m</b></p></div>`}
+if(step===3){if(rhat===null){const s=FEAT.map(([u,v])=>{const q=search2D(u,v,RTRUE).best;return q.ky/q.kx});rhat=s.reduce((a,b)=>a+b)/s.length}
+p2.innerHTML='';document.getElementById('p1').style.display='block';runLine(rhat,`estimated line slope from step 2: b_y/b_x = ${rhat.toFixed(2)} → b_y ≈ ${(rhat*BX).toFixed(3)} m`);return}
+document.getElementById('p1').style.display='none'}
+function setTab(t){tab=t;document.getElementById('t1').classList.toggle('on',t===1);document.getElementById('t2').classList.toggle('on',t===2);
+document.getElementById('c1').style.display=t===1?'block':'none';document.getElementById('c2').style.display=t===2?'block':'none';
+document.getElementById('p2').style.display=t===2?'block':'none';document.getElementById('p1').style.display=t===1?'block':'none';
+px=[20,14];if(t===1)case1();else case2()}
+document.getElementById('t1').onclick=()=>setTab(1);document.getElementById('t2').onclick=()=>setTab(2);
+document.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{r1=+b.dataset.r;document.querySelectorAll('[data-r]').forEach(x=>x.classList.toggle('on',x===b));case1()});
+[['s1',1],['s2',2],['s3',3]].forEach(([id,n])=>document.getElementById(id).onclick=()=>{step=n;['s1','s2','s3'].forEach((x,i)=>document.getElementById(x).classList.toggle('on',i+1===n));document.getElementById('p2').style.display='block';case2()});
+document.getElementById('cl').addEventListener('click',e=>{const b=e.target.getBoundingClientRect();const u=Math.floor((e.clientX-b.left)/C),v=Math.floor((e.clientY-b.top)/C);
+if(u<14||u>37||v<8||v>19)return;px=[u,v];if(tab===1)case1();else if(step!==2)case2()});
+setTab(1);
+</script>
+
+<script>
+(function(){function post(){parent.postMessage({cvNotesHeight:document.documentElement.scrollHeight},'*')}
+addEventListener('load',post);if(window.ResizeObserver)new ResizeObserver(post).observe(document.body);setTimeout(post,300);})();
+</script>
+</body></html>

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>From pixels to metres</title>
+<style>
+:root{--text-primary:#18202B;--text-secondary:#5B6573;--text-success:#0F6E56;--surface-1:#EDF0F3;--surface-2:#E2E6EB;
+--border-subtle:rgba(24,32,43,.12);--border-strong:rgba(24,32,43,.30);--radius:8px;--radius-lg:12px;
+--font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--text-primary:#E6EAF0;--text-secondary:#9AA4B2;--text-success:#5DCAA5;
+--surface-1:#1E2631;--surface-2:#27303C;--border-subtle:rgba(230,234,240,.12);--border-strong:rgba(230,234,240,.32);color-scheme:dark}}
+html,body{margin:0;background:transparent}
+body{font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--text-primary);padding:4px 2px;overflow-x:auto}
+p{margin:0 0 6px}
+button{font:inherit;font-size:13px;padding:6px 12px;border-radius:var(--radius);border:1px solid var(--border-subtle);
+background:transparent;color:var(--text-primary);cursor:pointer}
+button:hover{background:var(--surface-1)}
+button:focus-visible,input:focus-visible{outline:2px solid #2F6FDE;outline-offset:2px}
+input[type=range]{accent-color:#2F6FDE}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+svg text{font-family:inherit}
+.th{font-size:14px;font-weight:500;fill:var(--text-primary)}
+.ts{font-size:12px;fill:var(--text-secondary)}
+.c-purple,.c-purple rect,.c-purple polygon{fill:#EEEDFE;stroke:#534AB7}
+.c-purple text{fill:#3C3489;stroke:none}
+.c-coral,.c-coral rect{fill:#FAECE7;stroke:#993C1D}
+.c-coral text{fill:#712B13;stroke:none}
+@media (prefers-color-scheme:dark){
+.c-purple,.c-purple rect,.c-purple polygon{fill:#3C3489;stroke:#AFA9EC}
+.c-purple text{fill:#EEEDFE}
+.c-coral,.c-coral rect{fill:#712B13;stroke:#F0997B}
+.c-coral text{fill:#FAECE7}}
+</style></head>
+<body>
+<svg width="100%" viewBox="0 0 680 330" role="img">
+<title>Similar triangles link disparity to depth</title>
+<desc>A point P at depth z is seen by two pinholes separated by baseline b. Moving the right ray parallel to pass through the left pinhole forms a small triangle on the sensor with base delta and height f, similar to the large triangle with base b and height z.</desc>
+<polygon class="c-purple" points="340,40 260,200 420,200" stroke-width="0.5" opacity="0.6"/>
+<polygon class="c-purple" points="260,200 230,260 290,260" stroke-width="0.5"/>
+<line x1="340" y1="40" x2="230" y2="260" stroke="#378ADD" stroke-width="2"/>
+<line x1="340" y1="40" x2="450" y2="260" stroke="#D85A30" stroke-width="2"/>
+<line x1="260" y1="200" x2="290" y2="260" stroke="#D85A30" stroke-width="1.8" stroke-dasharray="5 4"/>
+<line x1="200" y1="260" x2="320" y2="260" stroke="#5F5E5A" stroke-width="3"/>
+<line x1="360" y1="260" x2="480" y2="260" stroke="#5F5E5A" stroke-width="3"/>
+<circle cx="340" cy="40" r="6" fill="#639922"/>
+<circle cx="260" cy="200" r="4" fill="#5F5E5A"/>
+<circle cx="420" cy="200" r="4" fill="#5F5E5A"/>
+<circle cx="230" cy="260" r="4" fill="#378ADD"/>
+<circle cx="290" cy="260" r="4" fill="#D85A30"/>
+<text class="th" x="354" y="38">P</text>
+<text class="ts" x="248" y="196" text-anchor="end">O_l</text>
+<text class="ts" x="432" y="196">O_r</text>
+<line x1="260" y1="214" x2="420" y2="214" stroke="#5F5E5A" stroke-width="1"/>
+<line x1="260" y1="209" x2="260" y2="219" stroke="#5F5E5A" stroke-width="1"/>
+<line x1="420" y1="209" x2="420" y2="219" stroke="#5F5E5A" stroke-width="1"/>
+<text class="th" x="345" y="232" text-anchor="middle">b</text>
+<line x1="340" y1="40" x2="570" y2="40" stroke="#B4B2A9" stroke-width="0.8" stroke-dasharray="3 3"/>
+<line x1="420" y1="200" x2="570" y2="200" stroke="#B4B2A9" stroke-width="0.8" stroke-dasharray="3 3"/>
+<line x1="560" y1="40" x2="560" y2="200" stroke="#5F5E5A" stroke-width="1"/>
+<text class="th" x="572" y="125">z</text>
+<line x1="190" y1="200" x2="190" y2="260" stroke="#5F5E5A" stroke-width="1"/>
+<line x1="185" y1="200" x2="195" y2="200" stroke="#5F5E5A" stroke-width="1"/>
+<line x1="185" y1="260" x2="195" y2="260" stroke="#5F5E5A" stroke-width="1"/>
+<text class="th" x="178" y="235" text-anchor="end">f</text>
+<line x1="230" y1="280" x2="290" y2="280" stroke="#5F5E5A" stroke-width="1"/>
+<line x1="230" y1="275" x2="230" y2="285" stroke="#5F5E5A" stroke-width="1"/>
+<line x1="290" y1="275" x2="290" y2="285" stroke="#5F5E5A" stroke-width="1"/>
+<text class="th" x="260" y="302" text-anchor="middle">Δ (mm on sensor)</text>
+<text class="ts" x="260" y="320" text-anchor="middle">d = mₓ · Δ (pixels)</text>
+<text class="ts" x="140" y="280" text-anchor="end">left sensor</text>
+<text class="ts" x="490" y="280">right sensor</text>
+<text class="th" x="520" y="306">b / z = Δ / f</text>
+</svg>
+
+<script>
+(function(){function post(){parent.postMessage({cvNotesHeight:document.documentElement.scrollHeight},'*')}
+addEventListener('load',post);if(window.ResizeObserver)new ResizeObserver(post).observe(document.body);setTimeout(post,300);})();
+</script>
+</body></html>

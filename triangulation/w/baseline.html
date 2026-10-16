@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Why a wider baseline is better</title>
+<style>
+:root{--text-primary:#18202B;--text-secondary:#5B6573;--text-success:#0F6E56;--surface-1:#EDF0F3;--surface-2:#E2E6EB;
+--border-subtle:rgba(24,32,43,.12);--border-strong:rgba(24,32,43,.30);--radius:8px;--radius-lg:12px;
+--font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--text-primary:#E6EAF0;--text-secondary:#9AA4B2;--text-success:#5DCAA5;
+--surface-1:#1E2631;--surface-2:#27303C;--border-subtle:rgba(230,234,240,.12);--border-strong:rgba(230,234,240,.32);color-scheme:dark}}
+html,body{margin:0;background:transparent}
+body{font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--text-primary);padding:4px 2px;overflow-x:auto}
+p{margin:0 0 6px}
+button{font:inherit;font-size:13px;padding:6px 12px;border-radius:var(--radius);border:1px solid var(--border-subtle);
+background:transparent;color:var(--text-primary);cursor:pointer}
+button:hover{background:var(--surface-1)}
+button:focus-visible,input:focus-visible{outline:2px solid #2F6FDE;outline-offset:2px}
+input[type=range]{accent-color:#2F6FDE}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+svg text{font-family:inherit}
+.th{font-size:14px;font-weight:500;fill:var(--text-primary)}
+.ts{font-size:12px;fill:var(--text-secondary)}
+.c-purple,.c-purple rect,.c-purple polygon{fill:#EEEDFE;stroke:#534AB7}
+.c-purple text{fill:#3C3489;stroke:none}
+.c-coral,.c-coral rect{fill:#FAECE7;stroke:#993C1D}
+.c-coral text{fill:#712B13;stroke:none}
+@media (prefers-color-scheme:dark){
+.c-purple,.c-purple rect,.c-purple polygon{fill:#3C3489;stroke:#AFA9EC}
+.c-purple text{fill:#EEEDFE}
+.c-coral,.c-coral rect{fill:#712B13;stroke:#F0997B}
+.c-coral text{fill:#FAECE7}}
+</style></head>
+<body>
+<svg width="100%" viewBox="0 0 680 330" role="img">
+<title>Small vs large baseline: depth uncertainty</title>
+<desc>Each camera's ray has a small pixel error, drawn as a thin wedge. With a small baseline the wedges cross at a shallow angle and the region where P can be is long, so depth is uncertain. With a large baseline the region is a small diamond, so depth is precise.</desc>
+<text class="th" x="170" y="20" text-anchor="middle">Small baseline</text>
+<polygon points="170,130 178,70 176.3,40 163.7,40 162,70" fill="#EF9F27" opacity="0.45"/>
+<line x1="150" y1="280" x2="162" y2="70" stroke="#378ADD" stroke-width="0.8" stroke-dasharray="3 3"/>
+<line x1="150" y1="280" x2="178" y2="70" stroke="#378ADD" stroke-width="0.8" stroke-dasharray="3 3"/>
+<line x1="190" y1="280" x2="162" y2="70" stroke="#D85A30" stroke-width="0.8" stroke-dasharray="3 3"/>
+<line x1="190" y1="280" x2="178" y2="70" stroke="#D85A30" stroke-width="0.8" stroke-dasharray="3 3"/>
+<line x1="150" y1="280" x2="170" y2="70" stroke="#378ADD" stroke-width="2"/>
+<line x1="190" y1="280" x2="170" y2="70" stroke="#D85A30" stroke-width="2"/>
+<circle cx="170" cy="70" r="5" fill="#639922"/>
+<text class="ts" x="186" y="74">P</text>
+<polygon points="150,280 141,294 159,294" fill="#378ADD"/>
+<polygon points="190,280 181,294 199,294" fill="#D85A30"/>
+<line x1="150" y1="304" x2="190" y2="304" stroke="#5F5E5A" stroke-width="1"/>
+<text class="ts" x="170" y="324" text-anchor="middle">rays nearly parallel → depth uncertain</text>
+<line x1="340" y1="10" x2="340" y2="320" stroke="#B4B2A9" stroke-width="0.5" stroke-dasharray="4 4"/>
+<text class="th" x="510" y="20" text-anchor="middle">Large baseline</text>
+<polygon points="510,89 518,70 510,47 502,70" fill="#EF9F27" opacity="0.6"/>
+<line x1="430" y1="280" x2="502" y2="70" stroke="#378ADD" stroke-width="0.8" stroke-dasharray="3 3"/>
+<line x1="430" y1="280" x2="518" y2="70" stroke="#378ADD" stroke-width="0.8" stroke-dasharray="3 3"/>
+<line x1="590" y1="280" x2="502" y2="70" stroke="#D85A30" stroke-width="0.8" stroke-dasharray="3 3"/>
+<line x1="590" y1="280" x2="518" y2="70" stroke="#D85A30" stroke-width="0.8" stroke-dasharray="3 3"/>
+<line x1="430" y1="280" x2="510" y2="70" stroke="#378ADD" stroke-width="2"/>
+<line x1="590" y1="280" x2="510" y2="70" stroke="#D85A30" stroke-width="2"/>
+<circle cx="510" cy="70" r="5" fill="#639922"/>
+<text class="ts" x="526" y="74">P</text>
+<polygon points="430,280 421,294 439,294" fill="#378ADD"/>
+<polygon points="590,280 581,294 599,294" fill="#D85A30"/>
+<line x1="430" y1="304" x2="590" y2="304" stroke="#5F5E5A" stroke-width="1"/>
+<text class="ts" x="510" y="324" text-anchor="middle">wide angle → depth precise</text>
+<rect x="250" y="150" width="14" height="10" fill="#EF9F27" opacity="0.5"/>
+<text class="ts" x="270" y="159">possible P</text>
+</svg>
+
+<script>
+(function(){function post(){parent.postMessage({cvNotesHeight:document.documentElement.scrollHeight},'*')}
+addEventListener('load',post);if(window.ResizeObserver)new ResizeObserver(post).observe(document.body);setTimeout(post,300);})();
+</script>
+</body></html>

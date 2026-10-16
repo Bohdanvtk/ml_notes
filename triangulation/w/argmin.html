@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>From costs to a disparity map</title>
+<style>
+:root{--text-primary:#18202B;--text-secondary:#5B6573;--text-success:#0F6E56;--surface-1:#EDF0F3;--surface-2:#E2E6EB;
+--border-subtle:rgba(24,32,43,.12);--border-strong:rgba(24,32,43,.30);--radius:8px;--radius-lg:12px;
+--font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--text-primary:#E6EAF0;--text-secondary:#9AA4B2;--text-success:#5DCAA5;
+--surface-1:#1E2631;--surface-2:#27303C;--border-subtle:rgba(230,234,240,.12);--border-strong:rgba(230,234,240,.32);color-scheme:dark}}
+html,body{margin:0;background:transparent}
+body{font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--text-primary);padding:4px 2px;overflow-x:auto}
+p{margin:0 0 6px}
+button{font:inherit;font-size:13px;padding:6px 12px;border-radius:var(--radius);border:1px solid var(--border-subtle);
+background:transparent;color:var(--text-primary);cursor:pointer}
+button:hover{background:var(--surface-1)}
+button:focus-visible,input:focus-visible{outline:2px solid #2F6FDE;outline-offset:2px}
+input[type=range]{accent-color:#2F6FDE}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+svg text{font-family:inherit}
+.th{font-size:14px;font-weight:500;fill:var(--text-primary)}
+.ts{font-size:12px;fill:var(--text-secondary)}
+.c-purple,.c-purple rect,.c-purple polygon{fill:#EEEDFE;stroke:#534AB7}
+.c-purple text{fill:#3C3489;stroke:none}
+.c-coral,.c-coral rect{fill:#FAECE7;stroke:#993C1D}
+.c-coral text{fill:#712B13;stroke:none}
+@media (prefers-color-scheme:dark){
+.c-purple,.c-purple rect,.c-purple polygon{fill:#3C3489;stroke:#AFA9EC}
+.c-purple text{fill:#EEEDFE}
+.c-coral,.c-coral rect{fill:#712B13;stroke:#F0997B}
+.c-coral text{fill:#FAECE7}}
+</style></head>
+<body>
+<style>
+.gr{display:grid;grid-template-columns:repeat(20,14px);gap:1px}
+.gr div{width:14px;height:14px;cursor:pointer}
+.mp{display:grid;grid-template-columns:repeat(20,15px);gap:1px}
+.mp div{width:15px;height:15px;font-size:9px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.lb{font-size:13px;color:var(--text-secondary);margin:0 0 4px}
+.cb{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;align-items:end;height:90px}
+.cb div{border-radius:3px 3px 0 0;background:var(--border-strong)}
+.st{background:var(--surface-1);border-radius:var(--radius);padding:8px 12px}
+.st p{margin:0}
+</style>
+<h2 class="sr-only">For a chosen pixel, SSD values for every shift are shown as bars, the minimum is selected as the disparity, written into the disparity map, and converted to depth. A button repeats this for every pixel.</h2>
+<div style="display:flex;gap:10px;margin:0.25rem 0 1rem">
+<button id="run">Run on every pixel</button>
+<button id="rst">Reset map</button>
+</div>
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px">
+<div><p class="lb">left image (click a pixel)</p><div class="gr" id="gl"></div></div>
+<div><p class="lb">right image (best window found)</p><div class="gr" id="gr"></div></div>
+</div>
+<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;margin-top:1.25rem;align-items:start">
+<div>
+<p class="lb" id="ct">SSD for each shift d at pixel (u, v)</p>
+<div class="cb" id="cb"></div>
+<div style="display:grid;grid-template-columns:repeat(8,1fr);gap:6px" id="cl"></div>
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px">
+<div class="st"><p class="lb">argmin → disparity</p><p id="dv" style="font-size:20px;font-weight:500">d* = –</p></div>
+<div class="st"><p class="lb">depth z = b·f / d*</p><p id="zv" style="font-size:20px;font-weight:500">–</p></div>
+</div>
+</div>
+<div><p class="lb">disparity map (one number per pixel)</p><div class="mp" id="mp"></div>
+<p class="lb" style="margin-top:8px">background → 2, box → 5, dark border → no window fits</p></div>
+</div>
+<script>
+const H=10,W=20,D=7,r=1,FB=20;
+let s=11;const rn=()=>{s=(s*1103515245+12345)%2147483648;return 25+Math.floor(s/2147483648*200)};
+const BG=[],BX=[];for(let v=0;v<H;v++){BG.push([]);BX.push([]);for(let u=0;u<W+12;u++){BG[v].push(rn());BX[v].push(rn())}}
+const inb=(v,u)=>v>=3&&v<=6&&u>=8&&u<=13;
+const L=[],R=[];for(let v=0;v<H;v++){L.push([]);R.push([]);for(let u=0;u<W;u++){L[v].push(inb(v,u)?BX[v][u]:BG[v][u]);R[v].push(inb(v,u+5)?BX[v][u+5]:BG[v][u+2])}}
+const valid=(v,u)=>v>=r&&v<H-r&&u>=r&&u<W-r;
+function costs(v,u){const c=[];for(let d=0;d<=D;d++){if(u-d-r<0){c.push(null);continue}let t=0;for(let i=-r;i<=r;i++)for(let j=-r;j<=r;j++){const e=L[v+i][u+j]-R[v+i][u-d+j];t+=e*e}c.push(t)}return c}
+const best=c=>{let b=-1;c.forEach((x,i)=>{if(x!==null&&(b<0||x<c[b]))b=i});return b};
+const PAL=['#EEEDFE','#CECBF6','#AFA9EC','#9C94E6','#7F77DD','#534AB7','#3C3489','#26215C'];
+const map=Array.from({length:H},()=>Array(W).fill(undefined));
+const gl=document.getElementById('gl'),gr=document.getElementById('gr'),mp=document.getElementById('mp');
+const cL=[],cR=[],cM=[];
+for(let v=0;v<H;v++)for(let u=0;u<W;u++){
+const a=document.createElement('div');a.style.background=`rgb(${L[v][u]},${L[v][u]},${L[v][u]})`;a.onclick=()=>pick(v,u);gl.appendChild(a);cL.push(a);
+const b=document.createElement('div');b.style.background=`rgb(${R[v][u]},${R[v][u]},${R[v][u]})`;gr.appendChild(b);cR.push(b);
+const m=document.createElement('div');m.onclick=()=>pick(v,u);mp.appendChild(m);cM.push(m)}
+let timer=null;
+function paintMap(){for(let v=0;v<H;v++)for(let u=0;u<W;u++){const m=cM[v*W+u],d=map[v][u];
+if(!valid(v,u)){m.style.background='var(--border-strong)';m.textContent='';continue}
+if(d===undefined){m.style.background='var(--surface-1)';m.textContent='';continue}
+m.style.background=PAL[d];m.style.color=d>=4?'#EEEDFE':'#26215C';m.textContent=d}}
+function outline(cells,v,u,col,rad){cells.forEach(c=>{c.style.outline='none'});if(v===null)return;
+for(let i=-rad;i<=rad;i++)for(let j=-rad;j<=rad;j++){const vv=v+i,uu=u+j;if(vv<0||vv>=H||uu<0||uu>=W)continue;const c=cells[vv*W+uu];c.style.outline=`2px solid ${col}`;c.style.outlineOffset='-1px'}}
+function pick(v,u){
+if(!valid(v,u)){document.getElementById('ct').textContent=`pixel (${u}, ${v}) is on the border: the 3×3 window does not fit`;document.getElementById('cb').innerHTML='';document.getElementById('cl').innerHTML='';document.getElementById('dv').textContent='d* = –';document.getElementById('zv').textContent='–';outline(cL,v,u,'#D85A30',0);outline(cR,null);outline(cM,v,u,'#D85A30',0);return}
+const c=costs(v,u),b=best(c);map[v][u]=b;
+const mx=Math.max(...c.filter(x=>x!==null));
+document.getElementById('ct').textContent=`SSD for each shift d at pixel (u = ${u}, v = ${v})`;
+document.getElementById('cb').innerHTML=c.map((x,i)=>x===null?'<div style="height:0"></div>':`<div style="height:${Math.max(3,Math.round(x/mx*86))}px;${i===b?'background:#1D9E75;':''}"></div>`).join('');
+document.getElementById('cl').innerHTML=c.map((x,i)=>`<div style="font-size:11px;text-align:center;color:${i===b?'var(--text-success)':'var(--text-secondary)'}">${i}</div>`).join('');
+document.getElementById('dv').textContent=`d* = ${b}`;
+document.getElementById('zv').textContent=b>0?`${(FB/b).toFixed(1)} m`:'∞ (d* = 0)';
+outline(cL,v,u,'#7F77DD',1);outline(cR,v,u-b,'#1D9E75',1);paintMap();cM[v*W+u].style.outline='2px solid #D85A30';cM[v*W+u].style.outlineOffset='-1px';cM.forEach((m,i)=>{if(i!==v*W+u)m.style.outline='none'})}
+document.getElementById('run').onclick=()=>{if(timer)clearInterval(timer);let k=0;timer=setInterval(()=>{while(k<H*W&&!valid(Math.floor(k/W),k%W))k++;if(k>=H*W){clearInterval(timer);timer=null;return}pick(Math.floor(k/W),k%W);k++},18)};
+document.getElementById('rst').onclick=()=>{if(timer){clearInterval(timer);timer=null}for(let v=0;v<H;v++)for(let u=0;u<W;u++)map[v][u]=undefined;pick(4,10)};
+paintMap();pick(4,10);
+</script>
+
+<script>
+(function(){function post(){parent.postMessage({cvNotesHeight:document.documentElement.scrollHeight},'*')}
+addEventListener('load',post);if(window.ResizeObserver)new ResizeObserver(post).observe(document.body);setTimeout(post,300);})();
+</script>
+</body></html>
