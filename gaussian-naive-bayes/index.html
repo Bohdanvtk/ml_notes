@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gaussian Naive Bayes · ML notes</title>
+<meta name="description" content="Gaussian Naive Bayes from A to Z: from the full multivariate Gaussian to a product of 1D Gaussians, then fit, predict and an interactive playground.">
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/auto-render.min.js" onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'\\(',right:'\\)',display:false}],throwOnError:false})"></script></head>
+<body><div class="layout">
+<nav aria-label="Sections"><a class="back" href="../">All topics</a><ol><li><a href="#rule">The decision rule</a></li><li><a href="#full">Start: the full Gaussian</a></li><li><a href="#diag">Naive = diagonal covariance</a></li><li><a href="#quad">The quadratic form becomes a sum</a></li><li><a href="#product">A product of 1D Gaussians</a></li><li><a href="#fit">Fit</a></li><li><a href="#predict">Predict</a></li><li><a href="#example">Worked example</a></li><li><a href="#playground">Playground</a></li><li><a href="#corr">Correlated features</a></li></ol></nav>
+<main>
+<header class="top"><h1>Gaussian Naive Bayes</h1>
+<p>From the full multivariate Gaussian to a product of 1D Gaussians, step by step, then how to fit and predict.</p>
+<div class="legend"><span style="color:var(--left)">class A</span><span style="color:var(--right)">class B</span><span style="color:var(--match)">prediction</span></div>
+</header>
+
+<section id="rule">
+<div class="sec-head"><h2><span class="n">1</span>The decision rule</h2><button class="copy" data-id="rule">Copy link</button></div>
+<div class="formula">$$a(x) = \arg\max_{y}\; \lambda_y\, P(y)\, p(x \mid y)$$
+<p>\(x = (x^1, \dots, x^n)\) features, \(P(y)\) prior, \(p(x\mid y)\) class density, \(\lambda_y\) cost of a mistake on class \(y\).</p></div>
+</section>
+
+<section id="full">
+<div class="sec-head"><h2><span class="n">2</span>Start: the full Gaussian</h2><button class="copy" data-id="full">Copy link</button></div>
+<div class="formula">$$p(x \mid y) = \frac{1}{(2\pi)^{n/2}\,(\det \Sigma_y)^{1/2}}\; \exp\Bigl\{-\tfrac{1}{2}\,(x-\mu_y)^{T}\,\Sigma_y^{-1}\,(x-\mu_y)\Bigr\}$$
+<p>Two hard parts: \(\det \Sigma_y\) and \(\Sigma_y^{-1}\).</p></div>
+</section>
+
+<section id="diag">
+<div class="sec-head"><h2><span class="n">3</span>Naive = diagonal covariance</h2><button class="copy" data-id="diag">Copy link</button></div>
+<div class="formula"><p>Assumption: features are independent given the class.</p>
+$$\Sigma_y = \begin{pmatrix} \sigma_{y,1}^2 &amp; 0 &amp; \cdots &amp; 0 \\ 0 &amp; \sigma_{y,2}^2 &amp; \cdots &amp; 0 \\ \vdots &amp; \vdots &amp; \ddots &amp; \vdots \\ 0 &amp; 0 &amp; \cdots &amp; \sigma_{y,n}^2 \end{pmatrix}$$</div>
+<div class="formula"><p>Step 1 · determinant = product of the diagonal</p>
+$$\det \Sigma_y = \prod_{i=1}^{n} \sigma_{y,i}^2 \quad\Longrightarrow\quad (\det \Sigma_y)^{1/2} = \prod_{i=1}^{n} \sigma_{y,i}$$</div>
+<div class="formula"><p>Step 2 · inverse = invert every diagonal entry</p>
+$$\Sigma_y^{-1} = \begin{pmatrix} 1/\sigma_{y,1}^2 &amp; 0 &amp; \cdots &amp; 0 \\ 0 &amp; 1/\sigma_{y,2}^2 &amp; \cdots &amp; 0 \\ \vdots &amp; \vdots &amp; \ddots &amp; \vdots \\ 0 &amp; 0 &amp; \cdots &amp; 1/\sigma_{y,n}^2 \end{pmatrix}$$</div>
+</section>
+
+<section id="quad">
+<div class="sec-head"><h2><span class="n">4</span>The quadratic form becomes a sum</h2><button class="copy" data-id="quad">Copy link</button></div>
+<div class="formula"><p>Step 3 · in general</p>
+$$(x-\mu_y)^{T}\,\Sigma_y^{-1}\,(x-\mu_y) = \sum_{i=1}^{n}\sum_{j=1}^{n} (x^i-\mu_y^i)\,\bigl[\Sigma_y^{-1}\bigr]_{ij}\,(x^j-\mu_y^j)$$
+<p>Diagonal: \(\bigl[\Sigma_y^{-1}\bigr]_{ij} = 0\) for \(i \ne j\), so the cross terms \((x^i-\mu_y^i)(x^j-\mu_y^j)\) vanish.</p>
+$$(x-\mu_y)^{T}\,\Sigma_y^{-1}\,(x-\mu_y) = \sum_{i=1}^{n} \frac{(x^i-\mu_y^i)^2}{\sigma_{y,i}^2}$$</div>
+</section>
+
+<section id="product">
+<div class="sec-head"><h2><span class="n">5</span>A product of 1D Gaussians</h2><button class="copy" data-id="product">Copy link</button></div>
+<div class="formula"><p>Step 4 · exp of a sum = product of exps</p>
+$$\exp\Bigl\{-\sum_{i=1}^{n}\frac{(x^i-\mu_y^i)^2}{2\sigma_{y,i}^2}\Bigr\} = \prod_{i=1}^{n}\exp\Bigl\{-\frac{(x^i-\mu_y^i)^2}{2\sigma_{y,i}^2}\Bigr\}$$</div>
+<div class="formula"><p>Step 5 · split the constant</p>
+$$(2\pi)^{n/2}\,(\det\Sigma_y)^{1/2} = \prod_{i=1}^{n}\sqrt{2\pi}\;\prod_{i=1}^{n}\sigma_{y,i} = \prod_{i=1}^{n}\sqrt{2\pi\sigma_{y,i}^2}$$</div>
+<div class="formula"><p>Result</p>
+$$p(x \mid y) = \prod_{i=1}^{n} \underbrace{\frac{1}{\sqrt{2\pi\sigma_{y,i}^2}}\,\exp\Bigl\{-\frac{(x^i-\mu_y^i)^2}{2\sigma_{y,i}^2}\Bigr\}}_{p(x^i \mid y)\ \text{— a 1D Gaussian}}$$</div>
+</section>
+
+<section id="fit">
+<div class="sec-head"><h2><span class="n">6</span>Fit</h2><button class="copy" data-id="fit">Copy link</button></div>
+<div class="formula"><p>For every class \(y\), with \(l_y\) objects of class \(y\) out of \(l\):</p>
+$$P(y) = \frac{l_y}{l}, \qquad \mu_y^i = \frac{1}{l_y}\sum_{k:\,y_k=y} x_k^i, \qquad \sigma_{y,i}^2 = \frac{1}{l_y}\sum_{k:\,y_k=y}\bigl(x_k^i-\mu_y^i\bigr)^2$$
+<p>Training = per-column means and variances.</p></div>
+<div class="formula"><p>Parameters per class</p>
+$$\underbrace{\tfrac{n(n+1)}{2}}_{\text{full }\Sigma} \;\;\text{vs}\;\; \underbrace{n}_{\text{diagonal}} \qquad n = 100:\;\; 5050 \;\text{vs}\; 100$$
+<p>Fewer parameters → far less data needed.</p></div>
+</section>
+
+<section id="predict">
+<div class="sec-head"><h2><span class="n">7</span>Predict</h2><button class="copy" data-id="predict">Copy link</button></div>
+<div class="formula">$$a(x) = \arg\max_{y}\; \lambda_y\, P(y) \prod_{i=1}^{n} p(x^i \mid y)$$</div>
+<div class="formula"><p>Underflow: a product of many small numbers is 0 in floating point.</p>
+$$\bigl(10^{-5}\bigr)^{100} = 10^{-500} \;<\; 10^{-308} \approx \text{smallest double}$$
+<p>Take \(\ln\): product → sum, argmax unchanged.</p>
+$$a(x) = \arg\max_{y}\Bigl[\ln\lambda_y + \ln P(y) + \sum_{i=1}^{n}\Bigl(-\tfrac{1}{2}\ln\bigl(2\pi\sigma_{y,i}^2\bigr) - \frac{(x^i-\mu_y^i)^2}{2\sigma_{y,i}^2}\Bigr)\Bigr]$$</div>
+</section>
+
+<section id="example">
+<div class="sec-head"><h2><span class="n">8</span>Worked example</h2><button class="copy" data-id="example">Copy link</button></div>
+<div class="formula"><p>Two classes, two features, \(P(A)=P(B)=0.5\), \(\lambda_A=\lambda_B=1\), point \(x=(1,\,-2)\).</p>
+$$A:\; \mu=(0,\,-3),\; \sigma^2=(1,\,1) \qquad B:\; \mu=(0,\,3),\; \sigma^2=(2,\,2)$$</div>
+<div class="formula"><p>Class A</p>
+$$\ln p(x^1\mid A) = -\tfrac{1}{2}\ln 2\pi - \frac{(1-0)^2}{2} = -0.92 - 0.50 = -1.42$$
+$$\ln p(x^2\mid A) = -\tfrac{1}{2}\ln 2\pi - \frac{(-2+3)^2}{2} = -0.92 - 0.50 = -1.42$$
+$$\text{score}_A = -1.42 - 1.42 + \ln 0.5 = -2.84 - 0.69 = \mathbf{-3.53}$$</div>
+<div class="formula"><p>Class B</p>
+$$\ln p(x^1\mid B) = -\tfrac{1}{2}\ln 4\pi - \frac{(1-0)^2}{4} = -1.27 - 0.25 = -1.52$$
+$$\ln p(x^2\mid B) = -\tfrac{1}{2}\ln 4\pi - \frac{(-2-3)^2}{4} = -1.27 - 6.25 = -7.52$$
+$$\text{score}_B = -1.52 - 7.52 + \ln 0.5 \approx -9.03 - 0.69 = \mathbf{-9.72}$$</div>
+<div class="formula">$$-3.53 > -9.72 \;\Longrightarrow\; a(x) = A, \qquad P(A\mid x) = \frac{1}{1+e^{-9.72+3.53}} \approx 0.998$$</div>
+</section>
+
+<section id="playground">
+<div class="sec-head"><h2><span class="n">9</span>Playground</h2><button class="copy" data-id="playground">Copy link</button></div>
+<p class="lead">Set each class with the sliders, drag the test point, and read how the score is computed. It starts on the worked example above; untick “true parameters” to fit from the sample instead.</p>
+<div class="frame"><iframe src="w/playground.html" title="Gaussian Naive Bayes playground" loading="lazy"></iframe>
+<a class="open" href="w/playground.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
+</section>
+
+<section id="corr">
+<div class="sec-head"><h2><span class="n">10</span>Correlated features</h2><button class="copy" data-id="corr">Copy link</button></div>
+<p class="lead">Here \(r_A = 0.8\), \(r_B = 0.7\): the clouds are tilted. Naive Bayes only sees axis-aligned ellipses, so its boundary (solid) differs from the full-Gaussian one (dotted).</p>
+<div class="formula">$$\Sigma_y = \begin{pmatrix}\sigma_{y,1}^2 &amp; r_y\,\sigma_{y,1}\sigma_{y,2} \\ r_y\,\sigma_{y,1}\sigma_{y,2} &amp; \sigma_{y,2}^2\end{pmatrix} \;\xrightarrow{\;\text{naive}\;}\; \begin{pmatrix}\sigma_{y,1}^2 &amp; 0 \\ 0 &amp; \sigma_{y,2}^2\end{pmatrix}$$</div>
+<div class="frame"><iframe src="w/playground.html?preset=corr" title="Naive Bayes on correlated features" loading="lazy"></iframe>
+<a class="open" href="w/playground.html?preset=corr" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
+</section>
+<footer>Every visualization runs in the browser and works offline.</footer>
+</main></div>
+<script>
+addEventListener('message',e=>{if(!e.data||typeof e.data.cvNotesHeight!=='number')return;
+document.querySelectorAll('iframe').forEach(f=>{if(f.contentWindow===e.source)f.style.height=(e.data.cvNotesHeight+8)+'px'})});
+document.querySelectorAll('.copy').forEach(b=>b.addEventListener('click',async()=>{
+const url=location.href.split('#')[0]+'#'+b.dataset.id;
+try{await navigator.clipboard.writeText(url);b.textContent='Link copied'}catch(_){prompt('Copy this link:',url)}
+setTimeout(()=>b.textContent='Copy link',1600)}));
+const links=[...document.querySelectorAll('nav li a')];
+if(window.IntersectionObserver){const io=new IntersectionObserver(es=>{es.forEach(en=>{if(en.isIntersecting){links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+en.target.id))}})},{rootMargin:'-30% 0px -60% 0px'});
+document.querySelectorAll('section').forEach(s=>io.observe(s))}
+</script>
+</body></html>
