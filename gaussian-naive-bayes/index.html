@@ -2,13 +2,13 @@
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Gaussian Naive Bayes · ML notes</title>
-<meta name="description" content="Gaussian Naive Bayes from A to Z: from the full multivariate Gaussian to a product of 1D Gaussians, then fit, predict and an interactive playground.">
+<meta name="description" content="Gaussian Naive Bayes from A to Z: from the full multivariate Gaussian to a product of 1D Gaussians, then fit, predict and an interactive worked example.">
 <link rel="stylesheet" href="../assets/site.css">
 <link rel="stylesheet" href="../assets/katex/katex.min.css">
 <script defer src="../assets/katex/katex.min.js"></script>
 <script defer src="../assets/katex/auto-render.min.js" onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'\\(',right:'\\)',display:false}],throwOnError:false})"></script></head>
 <body><div class="layout">
-<nav aria-label="Sections"><a class="back" href="../">All topics</a><ol><li><a href="#rule">The decision rule</a></li><li><a href="#full">Start: the full Gaussian</a></li><li><a href="#diag">Naive = diagonal covariance</a></li><li><a href="#quad">The quadratic form becomes a sum</a></li><li><a href="#product">A product of 1D Gaussians</a></li><li><a href="#fit">Fit</a></li><li><a href="#predict">Predict</a></li><li><a href="#example">Worked example</a></li><li><a href="#playground">Playground</a></li><li><a href="#corr">Correlated features</a></li></ol></nav>
+<nav aria-label="Sections"><a class="back" href="../">All topics</a><ol><li><a href="#rule">The decision rule</a></li><li><a href="#full">Start: the full Gaussian</a></li><li><a href="#diag">Naive = diagonal covariance</a></li><li><a href="#quad">The quadratic form becomes a sum</a></li><li><a href="#product">A product of 1D Gaussians</a></li><li><a href="#fit">Fit</a></li><li><a href="#predict">Predict</a></li><li><a href="#example">Worked example</a></li></ol></nav>
 <main>
 <header class="top"><h1>Gaussian Naive Bayes</h1>
 <p>From the full multivariate Gaussian to a product of 1D Gaussians, step by step, then how to fit and predict.</p>
@@ -57,12 +57,14 @@ $$p(x \mid y) = \prod_{i=1}^{n} \underbrace{\frac{1}{\sqrt{2\pi\sigma_{y,i}^2}}\
 
 <section id="fit">
 <div class="sec-head"><h2><span class="n">6</span>Fit</h2><button class="copy" data-id="fit">Copy link</button></div>
-<div class="formula"><p>For every class \(y\), with \(l_y\) objects of class \(y\) out of \(l\):</p>
-$$P(y) = \frac{l_y}{l}, \qquad \mu_y^i = \frac{1}{l_y}\sum_{k:\,y_k=y} x_k^i, \qquad \sigma_{y,i}^2 = \frac{1}{l_y}\sum_{k:\,y_k=y}\bigl(x_k^i-\mu_y^i\bigr)^2$$
-<p>Training = per-column means and variances.</p></div>
-<div class="formula"><p>Parameters per class</p>
-$$\underbrace{\tfrac{n(n+1)}{2}}_{\text{full }\Sigma} \;\;\text{vs}\;\; \underbrace{n}_{\text{diagonal}} \qquad n = 100:\;\; 5050 \;\text{vs}\; 100$$
-<p>Fewer parameters → far less data needed.</p></div>
+<div class="formula"><p>For every class: share of objects, mean and variance of every feature.</p>
+$$P(y) = \frac{l_y}{l}, \qquad \mu_y^i = \text{mean of feature } i, \qquad \sigma_{y,i}^2 = \text{mean of } \bigl(x^i - \mu_y^i\bigr)^2$$</div>
+<div class="formula"><p>Example · 5 objects, 3 of them in class A: \((1,\,2),\ (2,\,5),\ (3,\,2)\)</p>
+$$P(A) = \frac{3}{5} = \mathbf{0.6}$$
+$$\mu_A^1 = \frac{1+2+3}{3} = \mathbf{2}, \qquad \mu_A^2 = \frac{2+5+2}{3} = \mathbf{3}$$
+$$\sigma_{A,1}^2 = \frac{(1-2)^2 + (2-2)^2 + (3-2)^2}{3} = \frac{2}{3} \approx \mathbf{0.67}$$
+$$\sigma_{A,2}^2 = \frac{(2-3)^2 + (5-3)^2 + (2-3)^2}{3} = \frac{6}{3} = \mathbf{2}$$
+<p>That's the whole training for class A. Same for B.</p></div>
 </section>
 
 <section id="predict">
@@ -76,33 +78,12 @@ $$a(x) = \arg\max_{y}\Bigl[\ln\lambda_y + \ln P(y) + \sum_{i=1}^{n}\Bigl(-\tfrac
 
 <section id="example">
 <div class="sec-head"><h2><span class="n">8</span>Worked example</h2><button class="copy" data-id="example">Copy link</button></div>
-<div class="formula"><p>Two classes, two features, \(P(A)=P(B)=0.5\), \(\lambda_A=\lambda_B=1\), point \(x=(1,\,-2)\).</p>
-$$A:\; \mu=(0,\,-3),\; \sigma^2=(1,\,1) \qquad B:\; \mu=(0,\,3),\; \sigma^2=(2,\,2)$$</div>
-<div class="formula"><p>Class A</p>
-$$\ln p(x^1\mid A) = -\tfrac{1}{2}\ln 2\pi - \frac{(1-0)^2}{2} = -0.92 - 0.50 = -1.42$$
-$$\ln p(x^2\mid A) = -\tfrac{1}{2}\ln 2\pi - \frac{(-2+3)^2}{2} = -0.92 - 0.50 = -1.42$$
-$$\text{score}_A = -1.42 - 1.42 + \ln 0.5 = -2.84 - 0.69 = \mathbf{-3.53}$$</div>
-<div class="formula"><p>Class B</p>
-$$\ln p(x^1\mid B) = -\tfrac{1}{2}\ln 4\pi - \frac{(1-0)^2}{4} = -1.27 - 0.25 = -1.52$$
-$$\ln p(x^2\mid B) = -\tfrac{1}{2}\ln 4\pi - \frac{(-2-3)^2}{4} = -1.27 - 6.25 = -7.52$$
-$$\text{score}_B = -1.52 - 7.52 + \ln 0.5 \approx -9.03 - 0.69 = \mathbf{-9.72}$$</div>
-<div class="formula">$$-3.53 > -9.72 \;\Longrightarrow\; a(x) = A, \qquad P(A\mid x) = \frac{1}{1+e^{-9.72+3.53}} \approx 0.998$$</div>
+<p class="lead">Move the sliders: every number in the formulas updates.</p>
+<div class="frame"><iframe src="w/predict.html" title="Predict step by step" loading="lazy"></iframe>
+<a class="open" href="w/predict.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
 </section>
 
-<section id="playground">
-<div class="sec-head"><h2><span class="n">9</span>Playground</h2><button class="copy" data-id="playground">Copy link</button></div>
-<p class="lead">Set each class with the sliders, drag the test point, and read how the score is computed. It starts on the worked example above; untick “true parameters” to fit from the sample instead.</p>
-<div class="frame"><iframe src="w/playground.html" title="Gaussian Naive Bayes playground" loading="lazy"></iframe>
-<a class="open" href="w/playground.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
-</section>
 
-<section id="corr">
-<div class="sec-head"><h2><span class="n">10</span>Correlated features</h2><button class="copy" data-id="corr">Copy link</button></div>
-<p class="lead">Here \(r_A = 0.8\), \(r_B = 0.7\): the clouds are tilted. Naive Bayes only sees axis-aligned ellipses, so its boundary (solid) differs from the full-Gaussian one (dotted).</p>
-<div class="formula">$$\Sigma_y = \begin{pmatrix}\sigma_{y,1}^2 &amp; r_y\,\sigma_{y,1}\sigma_{y,2} \\ r_y\,\sigma_{y,1}\sigma_{y,2} &amp; \sigma_{y,2}^2\end{pmatrix} \;\xrightarrow{\;\text{naive}\;}\; \begin{pmatrix}\sigma_{y,1}^2 &amp; 0 \\ 0 &amp; \sigma_{y,2}^2\end{pmatrix}$$</div>
-<div class="frame"><iframe src="w/playground.html?preset=corr" title="Naive Bayes on correlated features" loading="lazy"></iframe>
-<a class="open" href="w/playground.html?preset=corr" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
-</section>
 <footer>Every visualization runs in the browser and works offline.</footer>
 </main></div>
 <script>

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Predict step by step</title>
+<link rel="stylesheet" href="../../assets/katex/katex.min.css">
+<script src="../../assets/katex/katex.min.js"></script>
+<style>
+:root{--ink:#18202B;--muted:#5B6573;--rule:rgba(24,32,43,.12);--surface:#EDF0F3;--a:#2F6FDE;--b:#E8692E;--win:#1D9E75;
+--font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--ink:#E6EAF0;--muted:#9AA4B2;--rule:rgba(230,234,240,.14);--surface:#1E2631;--a:#5B8FEA;--b:#F08A55;--win:#5DCAA5;color-scheme:dark}}
+html,body{margin:0;background:transparent}
+body{font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);padding:2px}
+input[type=range]{width:100%;margin:0;accent-color:var(--ink)}
+.A input{accent-color:var(--a)}.B input{accent-color:var(--b)}
+input:focus-visible{outline:2px solid var(--a);outline-offset:2px}
+.ctl{display:grid;grid-template-columns:repeat(3,1fr);gap:8px 24px}
+.grp h3{margin:0 0 4px;font-size:13px;font-weight:600}
+.A h3{color:var(--a)}.B h3{color:var(--b)}
+.row{display:grid;grid-template-columns:30px 1fr 40px;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.row output{font-family:var(--font-mono);font-size:12px;color:var(--ink);text-align:right}
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}
+.card{border:1px solid var(--rule);border-top:3px solid;border-radius:10px;padding:8px 12px;overflow-x:auto}
+.card.A{border-top-color:var(--a)}.card.B{border-top-color:var(--b)}
+.card .katex-display{margin:6px 0}
+.score{font-size:15px}
+.card.win{background:color-mix(in srgb,var(--win) 9%,transparent)}
+.res{margin-top:14px;padding:10px 14px;border-left:4px solid var(--win);background:var(--surface);border-radius:0 10px 10px 0;overflow-x:auto}
+.res .katex{font-size:1.2em}.res .katex-display{margin:4px 0}
+.card .katex{font-size:1.12em}.score .katex{font-size:1.2em}
+.hl-A{color:var(--a)}.hl-B{color:var(--b)}
+@media (max-width:760px){.cards{grid-template-columns:1fr}}
+@media (max-width:640px){.ctl{grid-template-columns:1fr}.card .katex{font-size:.86em}.res .katex{font-size:1em}}
+</style></head>
+<body>
+<div class="ctl">
+<div class="grp"><h3>Point x and prior</h3><div id="ctlX"></div></div>
+<div class="grp A"><h3>Class A</h3><div id="ctlA"></div></div>
+<div class="grp B"><h3>Class B</h3><div id="ctlB"></div></div>
+</div>
+<div class="cards"><div class="card A" id="cardA"></div><div class="card B" id="cardB"></div></div>
+<div class="res" id="res"></div>
+<script>
+// defaults = the worked example: A μ=(0,−3) σ²=(1,1), B μ=(0,3) σ²=(2,2), x=(1,−2), P(A)=0.5
+const S={x1:1,x2:-2,pA:0.5,A:{m1:0,m2:-3,v1:1,v2:1},B:{m1:0,m2:3,v1:2,v2:2}};
+const $=id=>document.getElementById(id);
+const slider=(lab,get,set,min,max,step,id)=>{const d=document.createElement('div');d.className='row';
+d.innerHTML=`<span>${lab}</span><input type="range" min="${min}" max="${max}" step="${step}" value="${get()}" aria-label="${id}"><output></output>`;
+const i=d.querySelector('input'),o=d.querySelector('output');const show=()=>o.textContent=(+get()).toFixed(step<0.1?2:1);
+i.addEventListener('input',()=>{set(+i.value);update()});show.o=o;d.show=show;return d};
+const all=[];const add=(p,...a)=>{const d=slider(...a);$(p).appendChild(d);all.push(d)};
+add('ctlX','x¹',()=>S.x1,v=>S.x1=v,-6,6,0.5,'x1');
+add('ctlX','x²',()=>S.x2,v=>S.x2=v,-6,6,0.5,'x2');
+add('ctlX','P(A)',()=>S.pA,v=>S.pA=v,0.05,0.95,0.05,'prior of A');
+for(const c of ['A','B']){const s=S[c];
+add('ctl'+c,'μ¹',()=>s.m1,v=>s.m1=v,-5,5,0.5,c+' mu1');add('ctl'+c,'μ²',()=>s.m2,v=>s.m2=v,-5,5,0.5,c+' mu2');
+add('ctl'+c,'σ₁²',()=>s.v1,v=>s.v1=v,0.25,4,0.25,c+' var1');add('ctl'+c,'σ₂²',()=>s.v2,v=>s.v2=v,0.25,4,0.25,c+' var2')}
+
+const n=v=>{const r=Math.abs(v)<0.005?0:v;return r.toFixed(2)},
+sq=v=>(Math.round(v*100)/100).toString(),
+p=v=>v<0?`(${n(v)})`:n(v),   // wrap negatives in brackets inside expressions
+ps=v=>v<0?`(${sq(v)})`:sq(v);
+function feat(x,m,v){const a=-0.5*Math.log(2*Math.PI*v),b=-((x-m)**2)/(2*v);return{a,b,t:a+b}}
+const K=(tex,el,disp=true)=>katex.render(tex,el,{displayMode:disp,throwOnError:false});
+
+function update(){all.forEach(d=>d.show());
+const pr={A:S.pA,B:1-S.pA},sc={},F={};
+for(const c of ['A','B']){const s=S[c];F[c]=[feat(S.x1,s.m1,s.v1),feat(S.x2,s.m2,s.v2)];sc[c]=F[c][0].t+F[c][1].t+Math.log(pr[c])}
+const win=sc.A>=sc.B?'A':'B',lose=win==='A'?'B':'A',pw=1/(1+Math.exp(sc[lose]-sc[win]));
+for(const c of ['A','B']){const s=S[c],f=F[c],col=c==='A'?'#2F6FDE':'#E8692E';
+const line=(i,x,m,v)=>`\\ln p(x^{${i}}\\mid ${c}) &= -\\tfrac12\\ln(2\\pi\\cdot ${sq(v)}) - \\frac{(${sq(x)} - ${ps(m)})^2}{2\\cdot ${sq(v)}} \\\\ &= ${n(f[i-1].a)} - ${n(-f[i-1].b)} = \\mathbf{${n(f[i-1].t)}}`;
+const el=$('card'+c);el.classList.toggle('win',c===win);
+el.innerHTML='<div></div><div class="score"></div>';
+K(`\\begin{aligned}${line(1,S.x1,s.m1,s.v1)}\\\\[6pt]${line(2,S.x2,s.m2,s.v2)}\\end{aligned}`,el.children[0]);
+K(`\\begin{aligned}\\text{score}_${c} &= ${n(f[0].t)} + ${p(f[1].t)} + \\ln ${sq(pr[c])} \\\\ &= \\boxed{\\color{${col}}{\\mathbf{${n(sc[c])}}}}\\end{aligned}`,el.children[1])}
+$('res').innerHTML='<div></div><div></div>';
+K(`${n(sc[win])} ${sc.A===sc.B?'=':'>'} ${n(sc[lose])} \\;\\Longrightarrow\\; a(x) = \\mathbf{${win}}`,$('res').children[0]);
+K(`P(${win}\\mid x) = \\frac{1}{1+e^{${n(sc[lose])} - ${p(sc[win])}}} = \\mathbf{${pw.toFixed(3)}}`,$('res').children[1])}
+update();
+</script>
+<script>
+(function(){function post(){parent.postMessage({cvNotesHeight:Math.ceil(document.body.getBoundingClientRect().height)+8},'*')}
+addEventListener('load',post);if(window.ResizeObserver)new ResizeObserver(post).observe(document.body);setTimeout(post,300);})();
+</script>
+</body></html>
