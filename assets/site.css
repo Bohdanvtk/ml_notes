@@ -45,3 +45,4 @@ footer{margin-top:72px;color:var(--muted);font-size:13px}
 .formula p{margin:6px 0 0;color:var(--muted);font-size:14px}
 .formula .katex-display{margin:6px 0;overflow-x:auto;overflow-y:hidden;padding:2px 0}
 .katex{font-size:1.08em}
+pre.code{margin:20px 0 0;padding:14px 16px;background:var(--card);border:1px solid var(--rule);border-radius:12px;overflow-x:auto;font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
