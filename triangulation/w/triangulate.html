@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>From a matched pair to a 3D point</title>
+<link rel="stylesheet" href="../../assets/katex/katex.min.css">
+<script src="../../assets/katex/katex.min.js"></script>
+<style>
+:root{--ink:#18202B;--muted:#5B6573;--rule:rgba(24,32,43,.12);--surface:#EDF0F3;--l:#2F6FDE;--r:#E8692E;--win:#1D9E75;--warn:#B7791F;
+--font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--ink:#E6EAF0;--muted:#9AA4B2;--rule:rgba(230,234,240,.14);--surface:#1E2631;--l:#5B8FEA;--r:#F08A55;--win:#5DCAA5;--warn:#E0B062;color-scheme:dark}}
+html,body{margin:0;background:transparent}
+body{font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);padding:2px}
+button{font:inherit;font-size:13px;padding:5px 12px;border-radius:8px;border:1px solid var(--rule);background:transparent;color:var(--ink);cursor:pointer}
+button:hover{background:var(--surface)}button.on{border-color:var(--ink)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--l);outline-offset:2px}
+.ctl{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px}
+.grp h3{margin:0 0 4px;font-size:13px;font-weight:600}
+.L h3{color:var(--l)}.R h3{color:var(--r)}
+.L input{accent-color:var(--l)}.R input{accent-color:var(--r)}
+input[type=range]{width:100%;margin:0}
+.row{display:grid;grid-template-columns:30px 1fr 36px;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.row output{font-family:var(--font-mono);font-size:12px;color:var(--ink);text-align:right}
+.pre{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.step{margin-top:10px;padding:6px 12px;border-left:3px solid var(--rule);background:var(--surface);border-radius:0 8px 8px 0;overflow-x:auto}
+.step p{margin:4px 0 0;font-size:12px;color:var(--muted)}
+.step .katex-display{margin:6px 0}
+.res{border-left-color:var(--win)}.res .katex{font-size:1.15em}
+.note{font-size:13px;margin:6px 0 2px}.note.ok{color:var(--win)}.note.bad{color:var(--warn)}
+@media (max-width:560px){.ctl{grid-template-columns:1fr}.step .katex{font-size:.85em}}
+</style></head>
+<body>
+<div class="ctl">
+<div class="grp L"><h3>Left pixel</h3><div id="cL"></div></div>
+<div class="grp R"><h3>Right pixel</h3><div id="cR"></div></div>
+</div>
+<div class="pre"><button data-p="400,300,388,300">exact match</button><button data-p="400,301,388,299">1 px error in v</button><button data-p="401,300,388,300">1 px error in u</button></div>
+<div class="step"><p>Step 2 · two rows from each camera</p><div id="s2"></div></div>
+<div class="step res"><p>Step 3 · least squares</p><div id="s3"></div><div class="note" id="note"></div></div>
+<script>
+const f=700,ox=320,oy=240,B=0.12;
+const M=[[f,0,ox,0],[0,f,oy,0],[0,0,1,0]],P=[[f,0,ox,f*B],[0,f,oy,0],[0,0,1,0]];
+const S={ul:400,vl:300,ur:388,vr:300};
+const $=id=>document.getElementById(id),all=[];
+function add(p,k,lab,min,max){const d=document.createElement('div');d.className='row';
+d.innerHTML=`<span>${lab}</span><input type="range" min="${min}" max="${max}" step="1" value="${S[k]}" aria-label="${lab}"><output></output>`;
+const i=d.querySelector('input');i.addEventListener('input',()=>{S[k]=+i.value;update()});d.sync=()=>{i.value=S[k];d.querySelector('output').textContent=S[k]};$(p).appendChild(d);all.push(d)}
+add('cL','ul','u_l',340,460);add('cL','vl','v_l',260,340);add('cR','ur','u_r',330,450);add('cR','vr','v_r',260,340);
+document.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{[S.ul,S.vl,S.ur,S.vr]=b.dataset.p.split(',').map(Number);update()});
+const K=(t,el)=>katex.render(t,el,{displayMode:true,throwOnError:false});
+const g=v=>{const r=Math.round(v*100)/100;return Object.is(r,-0)?'0':String(r)};
+const row=(u,m,i)=>[0,1,2].map(j=>u*m[2][j]-m[i][j]),rhs=(u,m,i)=>m[i][3]-u*m[2][3];
+function solve3(A,b){const m=A.map((r,i)=>[...r,b[i]]);for(let c=0;c<3;c++){let p=c;for(let r=c+1;r<3;r++)if(Math.abs(m[r][c])>Math.abs(m[p][c]))p=r;[m[c],m[p]]=[m[p],m[c]];
+for(let r=0;r<3;r++)if(r!==c){const k=m[r][c]/m[c][c];for(let j=c;j<4;j++)m[r][j]-=k*m[c][j]}}return m.map((r,i)=>r[3]/r[i])}
+function update(){all.forEach(d=>d.sync());
+document.querySelectorAll('[data-p]').forEach(b=>b.classList.toggle('on',b.dataset.p===[S.ul,S.vl,S.ur,S.vr].join(',')));
+const A=[row(S.ur,M,0),row(S.vr,M,1),row(S.ul,P,0),row(S.vl,P,1)],b=[rhs(S.ur,M,0),rhs(S.vr,M,1),rhs(S.ul,P,0),rhs(S.vl,P,1)];
+const AtA=[0,1,2].map(i=>[0,1,2].map(j=>A.reduce((s,r)=>s+r[i]*r[j],0))),Atb=[0,1,2].map(i=>A.reduce((s,r,k)=>s+r[i]*b[k],0));
+const x=solve3(AtA,Atb),res=A.map((r,k)=>r[0]*x[0]+r[1]*x[1]+r[2]*x[2]-b[k]),rn=Math.hypot(...res),d=S.ul-S.ur;
+K(`\\begin{array}{l} u_r\\,m_3 - m_1:\\\\ v_r\\,m_3 - m_2:\\\\ u_l\\,p_3 - p_1:\\\\ v_l\\,p_3 - p_2: \\end{array}\\;
+\\underbrace{\\begin{bmatrix}${A.map(r=>r.map(g).join(' & ')).join('\\\\')}\\end{bmatrix}}_{A}
+\\begin{bmatrix}x_r\\\\ y_r\\\\ z_r\\end{bmatrix} = \\underbrace{\\begin{bmatrix}${b.map(g).join('\\\\')}\\end{bmatrix}}_{\\mathbf b}`,$('s2'));
+K(`\\mathbf{x}_r = (A^{T}A)^{-1}A^{T}\\mathbf{b} = \\begin{bmatrix}${x[0].toFixed(2)}\\\\ ${x[1].toFixed(2)}\\\\ \\mathbf{${x[2].toFixed(2)}}\\end{bmatrix}\\text{ m}
+\\qquad z_r = \\boxed{\\mathbf{${x[2].toFixed(2)}\\ \\text{m}}}`,$('s3'));
+const n=$('note');
+if(d<=0){n.className='note bad';n.textContent=`u_l − u_r = ${d}: disparity must be positive, the rays meet behind the cameras.`;return}
+n.className='note '+(rn<1e-6?'ok':'bad');
+n.textContent=rn<1e-6?`‖Ax − b‖ = 0: the two rays intersect exactly. Check: z = f·b / (u_l − u_r) = 84 / ${d} = ${(84/d).toFixed(2)} m. Here 1 px of disparity is worth ${(100*(84/d-84/(d+1))).toFixed(0)} cm of depth.`
+:`‖Ax − b‖ = ${rn.toFixed(2)}: v_l ≠ v_r, so the rays miss each other and least squares picks the closest point. With equal v it would be 84 / ${d} = ${(84/d).toFixed(2)} m, so this error moves the point ${Math.abs(100*(x[2]-84/d)).toFixed(0)} cm in depth.`}
+update();
+</script>
+<script>
+(function(){function post(){parent.postMessage({cvNotesHeight:Math.ceil(document.body.getBoundingClientRect().height)+8},'*')}
+addEventListener('load',post);if(window.ResizeObserver)new ResizeObserver(post).observe(document.body);setTimeout(post,300);})();
+</script>
+</body></html>

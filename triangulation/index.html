@@ -8,7 +8,7 @@
 <script defer src="../assets/katex/katex.min.js"></script>
 <script defer src="../assets/katex/auto-render.min.js" onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'\\(',right:'\\)',display:false}],throwOnError:false})"></script></head>
 <body><div class="layout">
-<nav aria-label="Sections"><a class="back" href="../">All topics</a><ol><li><a href="#rays">One ray vs two rays</a></li><li><a href="#baseline">Why a wider baseline is better</a></li><li><a href="#window">The matching window</a></li><li><a href="#metrics">Comparing windows: SAD, SSD, NCC</a></li><li><a href="#scanline">One row, step by step</a></li><li><a href="#argmin">From costs to a disparity map</a></li><li><a href="#fullmap">Every pixel has its own d</a></li><li><a href="#vshift">When the camera is also shifted in y</a></li><li><a href="#epiline">Search along the epipolar line</a></li></ol></nav>
+<nav aria-label="Sections"><a class="back" href="../">All topics</a><ol><li><a href="#rays">One ray vs two rays</a></li><li><a href="#baseline">Why a wider baseline is better</a></li><li><a href="#window">The matching window</a></li><li><a href="#metrics">Comparing windows: SAD, SSD, NCC</a></li><li><a href="#scanline">One row, step by step</a></li><li><a href="#argmin">From costs to a disparity map</a></li><li><a href="#fullmap">Every pixel has its own d</a></li><li><a href="#vshift">When the camera is also shifted in y</a></li><li><a href="#epiline">Search along the epipolar line</a></li><li><a href="#tri3d">From a matched pair to a 3D point</a></li></ol></nav>
 <main>
 <header class="top"><h1>Triangulation and simple stereo</h1>
 <p>Depth from two cameras with known or partly known parameters: rays, disparity, window matching, the disparity map, and following a pixel to its 3D point.</p>
@@ -68,6 +68,42 @@
 <div class="formula">$$\begin{bmatrix}u_l &amp; v_l &amp; 1\end{bmatrix} F \begin{bmatrix}u_r \\ v_r \\ 1\end{bmatrix} = 0 \;\Longrightarrow\; a\,u_r + b\,v_r + c = 0$$</div>
 <div class="frame"><iframe src="w/epiline.html" title="Search along the epipolar line" loading="lazy"></iframe>
 <a class="open" href="w/epiline.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
+</section>
+<section id="tri3d">
+<div class="sec-head"><h2><span class="n">10</span>From a matched pair to a 3D point</h2><button class="copy" data-id="tri3d">Copy link</button></div>
+<p class="lead">Input: one matched pixel pair and the calibrated cameras. Output: a 3D point. Repeat for every pair to get the point cloud.</p>
+<div class="formula"><p>Step 0 · known from calibration</p>
+$$K_l = K_r = \begin{bmatrix}700 &amp; 0 &amp; 320\\ 0 &amp; 700 &amp; 240\\ 0 &amp; 0 &amp; 1\end{bmatrix}, \qquad R = I, \qquad \mathbf t = \begin{bmatrix}0.12\\ 0\\ 0\end{bmatrix}\text{ m}, \qquad \mathbf x_l = R\,\mathbf x_r + \mathbf t$$</div>
+<div class="formula"><p>Step 1 · projection matrices, both acting on \(\mathbf x_r\)</p>
+$$\tilde{\mathbf u}_r = \underbrace{[K_r \mid \mathbf 0]}_{M}\,\tilde{\mathbf x}_r = \begin{bmatrix}700 &amp; 0 &amp; 320 &amp; 0\\ 0 &amp; 700 &amp; 240 &amp; 0\\ 0 &amp; 0 &amp; 1 &amp; 0\end{bmatrix}\tilde{\mathbf x}_r, \qquad \tilde{\mathbf u}_l = \underbrace{K_l\,[R \mid \mathbf t]}_{P}\,\tilde{\mathbf x}_r = \begin{bmatrix}700 &amp; 0 &amp; 320 &amp; 84\\ 0 &amp; 700 &amp; 240 &amp; 0\\ 0 &amp; 0 &amp; 1 &amp; 0\end{bmatrix}\tilde{\mathbf x}_r$$
+<p>\(84 = 700 \cdot 0.12\)</p></div>
+<div class="formula"><p>Step 2 · each camera gives two linear equations (\(m_i\) = row \(i\) of \(M\), first 3 entries)</p>
+$$u_r = \frac{m_1\cdot\mathbf x_r + m_{14}}{m_3\cdot\mathbf x_r + m_{34}} \;\Longrightarrow\; (u_r\,m_3 - m_1)\cdot\mathbf x_r = m_{14} - u_r\,m_{34}$$
+<p>Same for \(v_r\) with \(m_2\), and for \(u_l, v_l\) with \(P\): 4 equations, 3 unknowns.</p>
+$$A\,\mathbf x_r = \mathbf b, \qquad A \in \mathbb R^{4\times 3}, \qquad \mathbf x_r = (A^{T}A)^{-1}A^{T}\mathbf b$$</div>
+<div class="frame"><iframe src="w/triangulate.html" title="From a matched pair to a 3D point" loading="lazy"></iframe>
+<a class="open" href="w/triangulate.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
+<pre class="code"><code>import numpy as np
+
+def triangulate(ul, vl, ur, vr, M, P):
+    # 4 equations, 2 from each camera
+    A = np.array([ur*M[2,:3] - M[0,:3],
+                  vr*M[2,:3] - M[1,:3],
+                  ul*P[2,:3] - P[0,:3],
+                  vl*P[2,:3] - P[1,:3]])
+    b = np.array([M[0,3] - ur*M[2,3],
+                  M[1,3] - vr*M[2,3],
+                  P[0,3] - ul*P[2,3],
+                  P[1,3] - vl*P[2,3]])
+    return np.linalg.lstsq(A, b, rcond=None)[0]   # (x_r, y_r, z_r)
+
+K = np.array([[700, 0, 320], [0, 700, 240], [0, 0, 1.]])
+R, t = np.eye(3), np.array([0.12, 0, 0])
+M = np.hstack([K, np.zeros((3, 1))])   # right camera
+P = K @ np.hstack([R, t[:, None]])     # left camera
+
+print(triangulate(400, 300, 388, 300, M, P))   # [0.68 0.6  7.  ]
+# OpenCV: cv2.triangulatePoints</code></pre>
 </section>
 <footer>Based on Shree Nayar, First Principles of Computer Vision. Every visualization runs in the browser and works offline.</footer>
 </main></div>
