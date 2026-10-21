@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Search along the epipolar line</title>
+<link rel="stylesheet" href="../../assets/katex/katex.min.css">
+<script src="../../assets/katex/katex.min.js"></script>
+<style>
+:root{--ink:#18202B;--muted:#5B6573;--rule:rgba(24,32,43,.12);--surface:#EDF0F3;--l:#2F6FDE;--r:#E8692E;--win:#1D9E75;
+--font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--ink:#E6EAF0;--muted:#9AA4B2;--rule:rgba(230,234,240,.14);--surface:#1E2631;--l:#5B8FEA;--r:#F08A55;--win:#5DCAA5;color-scheme:dark}}
+html,body{margin:0;background:transparent}
+body{font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);padding:2px}
+button{font:inherit;font-size:13px;padding:5px 12px;border-radius:8px;border:1px solid var(--rule);background:transparent;color:var(--ink);cursor:pointer}
+button:hover{background:var(--surface)}
+button:focus-visible,input:focus-visible,canvas:focus-visible{outline:2px solid var(--l);outline-offset:2px}
+input[type=range]{accent-color:var(--ink);width:120px}
+.imgs{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.lb{font-size:12px;color:var(--muted);margin:0 0 4px}
+.lb b{font-weight:600}.L{color:var(--l)}.R{color:var(--r)}
+canvas{display:block;width:100%;border-radius:8px}
+#cl{cursor:crosshair;touch-action:none}
+.bar{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin:10px 0 0;font-size:13px;color:var(--muted)}
+.bar output{font-family:var(--font-mono);font-size:12px;color:var(--ink)}
+#cost{margin-top:10px;background:var(--surface)}
+.eq{margin-top:10px;padding:6px 12px;border-left:3px solid var(--r);background:var(--surface);border-radius:0 8px 8px 0;overflow-x:auto}
+.eq .katex-display{margin:6px 0}
+.res{border-left-color:var(--win)}
+@media (max-width:560px){.imgs{grid-template-columns:1fr}.eq .katex{font-size:.85em}}
+</style></head>
+<body>
+<div class="imgs">
+<div><p class="lb"><b class="L">left image</b> · click a point</p><canvas id="cl" tabindex="0" aria-label="Left image. Click to pick a point; arrow keys move it."></canvas></div>
+<div><p class="lb"><b class="R">right image</b> · its epipolar line</p><canvas id="cr" aria-label="Right image with the epipolar line and the sliding window"></canvas></div>
+</div>
+<div class="bar">
+<button id="go">Search along the line</button><button id="skip">Show result</button>
+<span>window <input id="win" type="range" min="2" max="8" step="1" value="5" aria-label="window half size"> <output id="winv"></output></span>
+</div>
+<canvas id="cost" aria-label="SSD cost along the epipolar line"></canvas>
+<div class="eq" id="eq1"></div>
+<div class="eq res" id="eq2"></div>
+<script>
+// ---------- scene and cameras ----------
+const W=200,H=150,f=190,ox=100,oy=75,BOX=3.5,WALL=5.5;
+const rot=(ax,deg)=>{const a=deg*Math.PI/180,c=Math.cos(a),s=Math.sin(a);
+return ax==='y'?[[c,0,s],[0,1,0],[-s,0,c]]:[[c,-s,0],[s,c,0],[0,0,1]]};
+const mm=(A,B)=>A.map(r=>B[0].map((_,j)=>r.reduce((s,v,k)=>s+v*B[k][j],0)));
+const mv=(A,x)=>A.map(r=>r[0]*x[0]+r[1]*x[1]+r[2]*x[2]);
+const T=A=>A[0].map((_,j)=>A.map(r=>r[j]));
+const Rr=mm(rot('y',-5),rot('z',4)),C=[0.6,0.22,0];      // right camera: X_r = R (X − C)
+function hash(i,j,s){let h=(i*374761393+j*668265263+s*982451653)|0;h=Math.imul(h^h>>>13,1274126177);return((h^h>>>16)>>>0)/4294967296}
+function vnoise(x,y,s){const i=Math.floor(x),j=Math.floor(y),fx=x-i,fy=y-j,u=fx*fx*(3-2*fx),v=fy*fy*(3-2*fy);
+const a=hash(i,j,s),b=hash(i+1,j,s),c=hash(i,j+1,s),d=hash(i+1,j+1,s);return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v}
+const tex=(x,y,s)=>0.55*vnoise(x*7,y*7,s)+0.3*vnoise(x*15,y*15,s+1)+0.15*vnoise(x*31,y*31,s+2);
+function shade(o,d){ // ray o + t d → brightness and the 3D point
+let t=(BOX-o[2])/d[2],X=o[0]+t*d[0],Y=o[1]+t*d[1];
+if(X>-0.9&&X<0.1&&Y>-0.5&&Y<0.4)return{g:0.25+0.7*tex(X,Y,11),P:[X,Y,BOX]};
+t=(WALL-o[2])/d[2];X=o[0]+t*d[0];Y=o[1]+t*d[1];return{g:0.12+0.6*tex(X,Y,3),P:[X,Y,WALL]}}
+const ray=(u,v)=>[(u-ox)/f,(v-oy)/f,1];
+const IL=new Float32Array(W*H),IR=new Float32Array(W*H),PL=[];
+for(let v=0;v<H;v++)for(let u=0;u<W;u++){const s=shade([0,0,0],ray(u,v));IL[v*W+u]=s.g;PL.push(s.P);
+IR[v*W+u]=shade(C,mv(T(Rr),ray(u,v))).g}
+// fundamental matrix from the cameras: E = [t]× R, F' = K^-T E K^-1, Nayar's form x_lᵀ F x_r = 0 uses F = F'ᵀ
+const t=mv(Rr,C).map(v=>-v),tx=[[0,-t[2],t[1]],[t[2],0,-t[0]],[-t[1],t[0],0]];
+const Ki=[[1/f,0,-ox/f],[0,1/f,-oy/f],[0,0,1]];
+let F=T(mm(mm(T(Ki),mm(tx,Rr)),Ki));const fmax=Math.max(...F.flat().map(Math.abs));F=F.map(r=>r.map(v=>v/fmax));
+const project=P=>{const q=mv(Rr,[P[0]-C[0],P[1]-C[1],P[2]-C[2]]);return[f*q[0]/q[2]+ox,f*q[1]/q[2]+oy]};
+
+// ---------- state ----------
+let ul=120,vl=82,line=null,cand=[],costs=[],cur=-1,best=-1,anim=null;
+const $=id=>document.getElementById(id);
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const K=(tex,el)=>katex.render(tex,el,{displayMode:true,throwOnError:false});
+function sampleR(u,v){const i=Math.floor(u),j=Math.floor(v),a=u-i,b=v-j,g=(x,y)=>IR[y*W+x];
+return(1-a)*(1-b)*g(i,j)+a*(1-b)*g(i+1,j)+(1-a)*b*g(i,j+1)+a*b*g(i+1,j+1)}
+function compute(){const h=+$('win').value;
+const xl=[ul,vl,1],l=[0,1,2].map(j=>xl[0]*F[0][j]+xl[1]*F[1][j]+xl[2]*F[2][j]);  // [a b c] = x_lᵀ F
+line=l;cand=[];costs=[];
+for(let u=h;u<W-h-1;u++){const v=-(l[0]*u+l[2])/l[1];if(v<h||v>=H-h-1)continue;
+let s=0;for(let j=-h;j<=h;j++)for(let i=-h;i<=h;i++){const d=IL[(vl+j)*W+ul+i]-sampleR(u+i,v+j);s+=d*d}
+cand.push([u,v]);costs.push(s/((2*h+1)**2))}
+best=costs.indexOf(Math.min(...costs))}
+const fm=v=>{if(Math.abs(v)<5e-13)return'0';if(Math.abs(v)>=0.01)return v.toFixed(3);const e=Math.floor(Math.log10(Math.abs(v))),m=v/10**e;return`${m.toFixed(2)}\\!\\times\\!10^{${e}}`};
+const n2=v=>(v<0?'-':'')+Math.abs(v).toFixed(2);
+function formulas(){const [a,b,c]=line,m=-a/b,q=-c/b;
+K(`\\underbrace{\\begin{bmatrix}${ul} & ${vl} & 1\\end{bmatrix}}_{x_l^{T}} \\underbrace{\\begin{bmatrix}${F.map(r=>r.map(fm).join(' & ')).join('\\\\')}\\end{bmatrix}}_{F} = \\begin{bmatrix}${fm(a)} & ${fm(b)} & ${fm(c)}\\end{bmatrix} = \\begin{bmatrix}a & b & c\\end{bmatrix}`,$('eq1'));
+const done=cur>=costs.length-1&&best>=0,bp=cand[best],tr=project(PL[vl*W+ul]);
+K(`\\begin{gathered}a\\,u_r + b\\,v_r + c = 0 \\;\\Longrightarrow\\; \\boxed{v_r = ${n2(m)}\\,u_r ${q<0?'-':'+'} ${Math.abs(q).toFixed(1)}}`+
+(done?`\\\\[4pt] \\text{min SSD at } (u_r,\\ v_r) = \\mathbf{(${bp[0]},\\ ${bp[1].toFixed(1)})}`:'')+'\\end{gathered}',$('eq2'));
+$('eq2').title=done?`true match from the 3D scene: (${tr[0].toFixed(1)}, ${tr[1].toFixed(1)})`:''}
+
+// ---------- drawing ----------
+function img(cv,I){const o=document.createElement('canvas');o.width=W;o.height=H;const c=o.getContext('2d'),d=c.createImageData(W,H);
+for(let k=0;k<W*H;k++){const g=Math.round(255*Math.min(1,I[k]));d.data.set([g,g,g,255],4*k)}c.putImageData(d,0,0);return o}
+const OL=img(null,IL),OR=img(null,IR);
+function prep(cv,h){const dpr=devicePixelRatio||1,w=cv.clientWidth,hh=h?h:w*H/W;cv.width=w*dpr;cv.height=hh*dpr;cv.style.height=hh+'px';
+const c=cv.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);return[c,w/W,w,hh]}
+function draw(){const hw=+$('win').value,cl=css('--l'),cr=css('--r'),cw=css('--win'),ink=css('--ink'),mu=css('--muted');
+let [c,s]=prep($('cl'));c.drawImage(OL,0,0,W*s,H*s);
+c.lineWidth=2;c.strokeStyle=cl;c.strokeRect((ul-hw-0.5)*s,(vl-hw-0.5)*s,(2*hw+1)*s,(2*hw+1)*s);
+c.fillStyle=cl;c.beginPath();c.arc((ul+0.5)*s,(vl+0.5)*s,3,0,7);c.fill();
+[c,s]=prep($('cr'));c.drawImage(OR,0,0,W*s,H*s);
+const [a,b,cc]=line;c.strokeStyle=cr;c.lineWidth=1.5;c.beginPath();c.moveTo(0,(-(cc)/b+0.5)*s);c.lineTo(W*s,(-(a*W+cc)/b+0.5)*s);c.stroke();
+const box=(p,col,lw)=>{c.lineWidth=lw;c.strokeStyle=col;c.strokeRect((p[0]-hw)*s,(p[1]-hw)*s,(2*hw+1)*s,(2*hw+1)*s)};
+const done=cur>=costs.length-1;
+if(cur>=0&&!done)box(cand[cur],cr,2);if(done&&best>=0){box(cand[best],cw,2.5);c.fillStyle=cw;c.beginPath();c.arc((cand[best][0]+0.5)*s,(cand[best][1]+0.5)*s,3,0,7);c.fill()}
+// cost curve
+const cv=$('cost');let w,hh;[c,s,w,hh]=prep(cv,120);const pad=26,mx=Math.max(...costs),X=i=>pad+(cand[i][0]/W)*(w-pad-8),Y=v=>hh-18-(v/mx)*(hh-30);
+c.fillStyle=mu;c.font='11px system-ui,sans-serif';c.fillText('SSD',4,14);c.fillText('u_r →',w-40,hh-4);
+c.strokeStyle=css('--rule');c.lineWidth=1;c.beginPath();c.moveTo(pad,hh-18);c.lineTo(w-8,hh-18);c.stroke();
+c.strokeStyle=cr;c.lineWidth=1.5;c.beginPath();for(let i=0;i<=Math.min(cur,costs.length-1);i++){i?c.lineTo(X(i),Y(costs[i])):c.moveTo(X(i),Y(costs[i]))}c.stroke();
+if(cur>=0&&!done){c.strokeStyle=ink;c.setLineDash([3,3]);c.beginPath();c.moveTo(X(cur),8);c.lineTo(X(cur),hh-18);c.stroke();c.setLineDash([])}
+if(done&&best>=0){c.fillStyle=cw;c.beginPath();c.arc(X(best),Y(costs[best]),4.5,0,7);c.fill();c.fillText(`min at u_r = ${cand[best][0]}`,Math.min(X(best)+8,w-110),Y(costs[best])-6)}}
+
+function run(animate){cancelAnimationFrame(anim);compute();
+if(!animate){cur=costs.length-1;draw();formulas();return}
+cur=0;const t0=performance.now(),dur=2200;formulas();
+const step=t=>{cur=Math.min(costs.length-1,Math.floor((t-t0)/dur*costs.length));draw();if(cur<costs.length-1)anim=requestAnimationFrame(step);else formulas()};
+anim=requestAnimationFrame(step)}
+function pick(e){const r=$('cl').getBoundingClientRect(),hw=+$('win').value;
+ul=Math.max(hw,Math.min(W-hw-1,Math.floor((e.clientX-r.left)/r.width*W)));vl=Math.max(hw,Math.min(H-hw-1,Math.floor((e.clientY-r.top)/r.height*H)));run(true)}
+$('cl').addEventListener('pointerdown',pick);
+$('cl').addEventListener('keydown',e=>{const k={ArrowLeft:[-2,0],ArrowRight:[2,0],ArrowUp:[0,-2],ArrowDown:[0,2]}[e.key];if(!k)return;e.preventDefault();
+const hw=+$('win').value;ul=Math.max(hw,Math.min(W-hw-1,ul+k[0]));vl=Math.max(hw,Math.min(H-hw-1,vl+k[1]));run(false)});
+$('go').onclick=()=>run(true);$('skip').onclick=()=>run(false);
+$('win').addEventListener('input',()=>{$('winv').textContent=`${2*$('win').value+1}×${2*$('win').value+1}`;const hw=+$('win').value;
+ul=Math.max(hw,Math.min(W-hw-1,ul));vl=Math.max(hw,Math.min(H-hw-1,vl));run(false)});
+$('winv').textContent='11×11';
+if(window.ResizeObserver)new ResizeObserver(()=>{if(line)draw()}).observe(document.body);
+run(false);
+</script>
+<script>
+(function(){function post(){parent.postMessage({cvNotesHeight:Math.ceil(document.body.getBoundingClientRect().height)+8},'*')}
+addEventListener('load',post);if(window.ResizeObserver)new ResizeObserver(post).observe(document.body);setTimeout(post,300);})();
+</script>
+</body></html>

@@ -8,7 +8,7 @@
 <script defer src="../assets/katex/katex.min.js"></script>
 <script defer src="../assets/katex/auto-render.min.js" onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'\\(',right:'\\)',display:false}],throwOnError:false})"></script></head>
 <body><div class="layout">
-<nav aria-label="Sections"><a class="back" href="../">All topics</a><ol><li><a href="#rays">One ray vs two rays</a></li><li><a href="#baseline">Why a wider baseline is better</a></li><li><a href="#window">The matching window</a></li><li><a href="#metrics">Comparing windows: SAD, SSD, NCC</a></li><li><a href="#scanline">One row, step by step</a></li><li><a href="#argmin">From costs to a disparity map</a></li><li><a href="#fullmap">Every pixel has its own d</a></li><li><a href="#vshift">When the camera is also shifted in y</a></li></ol></nav>
+<nav aria-label="Sections"><a class="back" href="../">All topics</a><ol><li><a href="#rays">One ray vs two rays</a></li><li><a href="#baseline">Why a wider baseline is better</a></li><li><a href="#window">The matching window</a></li><li><a href="#metrics">Comparing windows: SAD, SSD, NCC</a></li><li><a href="#scanline">One row, step by step</a></li><li><a href="#argmin">From costs to a disparity map</a></li><li><a href="#fullmap">Every pixel has its own d</a></li><li><a href="#vshift">When the camera is also shifted in y</a></li><li><a href="#epiline">Search along the epipolar line</a></li></ol></nav>
 <main>
 <header class="top"><h1>Triangulation and simple stereo</h1>
 <p>Depth from two cameras with known or partly known parameters: rays, disparity, window matching, the disparity map, and following a pixel to its 3D point.</p>
@@ -61,6 +61,13 @@
 <p class="lead">If the right camera is shifted vertically too, the match leaves the row and lies on a slanted line. With a known \(b_y\) we search along that line. With an unknown \(b_y\) we first match a few strong points in 2D, read the direction from their parallel arrows, estimate \(b_y\), and then search along the estimated line.</p><div class="formula">$$\frac{v_l - v_r}{u_l - u_r} = \frac{f_y\,b_y}{f_x\,b_x}, \qquad z = \frac{f_x\,b_x}{u_l - u_r}$$</div>
 <div class="frame"><iframe src="w/vshift.html" title="When the camera is also shifted in y" loading="lazy"></iframe>
 <a class="open" href="w/vshift.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
+</section>
+<section id="epiline">
+<div class="sec-head"><h2><span class="n">9</span>Search along the epipolar line</h2><button class="copy" data-id="epiline">Copy link</button></div>
+<p class="lead">Click a point in the left image. The fundamental matrix gives its epipolar line in the right image, and the window slides only along that line.</p>
+<div class="formula">$$\begin{bmatrix}u_l &amp; v_l &amp; 1\end{bmatrix} F \begin{bmatrix}u_r \\ v_r \\ 1\end{bmatrix} = 0 \;\Longrightarrow\; a\,u_r + b\,v_r + c = 0$$</div>
+<div class="frame"><iframe src="w/epiline.html" title="Search along the epipolar line" loading="lazy"></iframe>
+<a class="open" href="w/epiline.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
 </section>
 <footer>Based on Shree Nayar, First Principles of Computer Vision. Every visualization runs in the browser and works offline.</footer>
 </main></div>
