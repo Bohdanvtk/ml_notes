@@ -71,16 +71,35 @@
 </section>
 <section id="tri3d">
 <div class="sec-head"><h2><span class="n">10</span>From a matched pair to a 3D point</h2><button class="copy" data-id="tri3d">Copy link</button></div>
-<p class="lead">Input: one matched pixel pair and the calibrated cameras. Output: a 3D point. Repeat for every pair to get the point cloud.</p>
-<div class="formula"><p>Step 0 · known from calibration</p>
-$$K_l = K_r = \begin{bmatrix}700 &amp; 0 &amp; 320\\ 0 &amp; 700 &amp; 240\\ 0 &amp; 0 &amp; 1\end{bmatrix}, \qquad R = I, \qquad \mathbf t = \begin{bmatrix}0.12\\ 0\\ 0\end{bmatrix}\text{ m}, \qquad \mathbf x_l = R\,\mathbf x_r + \mathbf t$$</div>
-<div class="formula"><p>Step 1 · projection matrices, both acting on \(\mathbf x_r\)</p>
-$$\tilde{\mathbf u}_r = \underbrace{[K_r \mid \mathbf 0]}_{M}\,\tilde{\mathbf x}_r = \begin{bmatrix}700 &amp; 0 &amp; 320 &amp; 0\\ 0 &amp; 700 &amp; 240 &amp; 0\\ 0 &amp; 0 &amp; 1 &amp; 0\end{bmatrix}\tilde{\mathbf x}_r, \qquad \tilde{\mathbf u}_l = \underbrace{K_l\,[R \mid \mathbf t]}_{P}\,\tilde{\mathbf x}_r = \begin{bmatrix}700 &amp; 0 &amp; 320 &amp; 84\\ 0 &amp; 700 &amp; 240 &amp; 0\\ 0 &amp; 0 &amp; 1 &amp; 0\end{bmatrix}\tilde{\mathbf x}_r$$
-<p>\(84 = 700 \cdot 0.12\)</p></div>
-<div class="formula"><p>Step 2 · each camera gives two linear equations (\(m_i\) = row \(i\) of \(M\), first 3 entries)</p>
-$$u_r = \frac{m_1\cdot\mathbf x_r + m_{14}}{m_3\cdot\mathbf x_r + m_{34}} \;\Longrightarrow\; (u_r\,m_3 - m_1)\cdot\mathbf x_r = m_{14} - u_r\,m_{34}$$
-<p>Same for \(v_r\) with \(m_2\), and for \(u_l, v_l\) with \(P\): 4 equations, 3 unknowns.</p>
-$$A\,\mathbf x_r = \mathbf b, \qquad A \in \mathbb R^{4\times 3}, \qquad \mathbf x_r = (A^{T}A)^{-1}A^{T}\mathbf b$$</div>
+<div class="io">
+<div><span class="tag in">in</span><b>pixel pair</b> from matching<br>\((u_l,\ v_l) = (400,\ 300)\)<br>\((u_r,\ v_r) = (388,\ 300)\)</div>
+<div><span class="tag in">in</span><b>cameras</b> from calibration<br>\(f = 700,\ \ (o_x,\ o_y) = (320,\ 240)\)<br>\(R = I,\ \ \mathbf t = (0.12,\ 0,\ 0)\) m</div>
+<div><span class="tag out">out</span><b>3D point</b> in the right camera frame<br>\(\mathbf x_r = (x_r,\ y_r,\ z_r)\) in metres</div>
+</div>
+
+<h3 class="sub">A · Simple case: cameras only shifted sideways \((R = I,\ \mathbf t = (b, 0, 0))\)</h3>
+<div class="formula"><p>Three formulas</p>
+$$z_r = \frac{f\,b}{u_l - u_r}, \qquad x_r = \frac{z_r\,(u_r - o_x)}{f}, \qquad y_r = \frac{z_r\,(v_r - o_y)}{f}$$</div>
+<div class="formula"><p>Plug in the numbers</p>
+$$z_r = \frac{700 \cdot 0.12}{400 - 388} = \frac{84}{12} = \mathbf{7.00}\text{ m}$$
+$$x_r = \frac{7 \cdot (388 - 320)}{700} = \mathbf{0.68}\text{ m}, \qquad y_r = \frac{7 \cdot (300 - 240)}{700} = \mathbf{0.60}\text{ m}$$</div>
+
+<h3 class="sub">B · General case: any \(R\) and \(\mathbf t\)</h3>
+<div class="formula"><p>B1 · build one projection matrix per camera (both act on \(\mathbf x_r\))</p>
+$$M = K_r\,[\,I \mid \mathbf 0\,], \qquad P = K_l\,[\,R \mid \mathbf t\,]$$
+$$M = \begin{bmatrix}700 &amp; 0 &amp; 320 &amp; 0\\ 0 &amp; 700 &amp; 240 &amp; 0\\ 0 &amp; 0 &amp; 1 &amp; 0\end{bmatrix}, \qquad P = \begin{bmatrix}700 &amp; 0 &amp; 320 &amp; \mathbf{84}\\ 0 &amp; 700 &amp; 240 &amp; 0\\ 0 &amp; 0 &amp; 1 &amp; 0\end{bmatrix} \qquad (84 = 700 \cdot 0.12)$$</div>
+<div class="formula"><p>B2 · every pixel coordinate gives one linear equation (\(m_i,\ p_i\) = row \(i\), first 3 entries)</p>
+$$\begin{aligned}
+(u_r\,m_3 - m_1)\cdot\mathbf x_r &amp;= m_{14} - u_r\,m_{34}\\
+(v_r\,m_3 - m_2)\cdot\mathbf x_r &amp;= m_{24} - v_r\,m_{34}\\
+(u_l\,p_3 - p_1)\cdot\mathbf x_r &amp;= p_{14} - u_l\,p_{34}\\
+(v_l\,p_3 - p_2)\cdot\mathbf x_r &amp;= p_{24} - v_l\,p_{34}
+\end{aligned}
+\quad\Longrightarrow\quad
+\underbrace{A}_{4\times 3}\,\mathbf x_r = \underbrace{\mathbf b}_{4\times 1}$$</div>
+<div class="formula"><p>B3 · 4 equations, 3 unknowns → least squares</p>
+$$\mathbf x_r = (A^{T}A)^{-1}A^{T}\mathbf b$$</div>
+<p class="lead">Move the pixels: both ways are computed side by side. Without noise they agree exactly.</p>
 <div class="frame"><iframe src="w/triangulate.html" title="From a matched pair to a 3D point" loading="lazy"></iframe>
 <a class="open" href="w/triangulate.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
 <pre class="code"><code>import numpy as np
