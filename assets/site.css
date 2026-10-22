@@ -46,3 +46,9 @@ footer{margin-top:72px;color:var(--muted);font-size:13px}
 .formula .katex-display{margin:6px 0;overflow-x:auto;overflow-y:hidden;padding:2px 0}
 .katex{font-size:1.08em}
 pre.code{margin:20px 0 0;padding:14px 16px;background:var(--card);border:1px solid var(--rule);border-radius:12px;overflow-x:auto;font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.io{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:16px}
+.io>div{background:var(--card);border:1px solid var(--rule);border-radius:10px;padding:10px 12px;font-size:14px;line-height:1.7}
+.tag{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:1px 7px;border-radius:999px;margin-right:6px;color:#fff;vertical-align:1px}
+.tag.in{background:var(--left)}.tag.out{background:var(--match)}
+h3.sub{font-size:17px;margin:28px 0 0;font-weight:650}
+@media (max-width:640px){.io{grid-template-columns:1fr}}
