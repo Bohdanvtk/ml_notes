@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Practice calibration · ML notes</title>
+<meta name="description" content="First practical step of camera calibration: cv2.findChessboardCorners finds the grid, cv2.cornerSubPix refines every corner to sub-pixel accuracy.">
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/auto-render.min.js" onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'\\(',right:'\\)',display:false}],throwOnError:false})"></script></head>
+<body><div class="layout">
+<nav aria-label="Sections"><a class="back" href="../">All topics</a><ol><li><a href="#find">findChessboardCorners</a></li><li><a href="#subpix">cornerSubPix</a></li></ol></nav>
+<main>
+<header class="top"><h1>Practice calibration</h1>
+<p>Calibration compares a known flat grid (corners at \((c\,s,\ r\,s,\ 0)\) mm) with where the camera saw those corners. Step one: find the corners in the photo, precisely.</p>
+<div class="legend"><span style="color:var(--right)">guess</span><span style="color:var(--left)">window</span><span style="color:var(--match)">true corner</span></div>
+</header>
+
+<section id="find">
+<div class="sec-head"><h2><span class="n">1</span>findChessboardCorners</h2><button class="copy" data-id="find">Copy link</button></div>
+<p class="lead">Local threshold → black quads → glue quads at shared vertices → order row by row. <code>pattern_size</code> counts <b>inner</b> corners; a wrong number gives <code>found = False</code>, never a partial result. Accuracy is about ±1 px.</p>
+<div class="formula">$$N \times M \text{ squares} \;\Longrightarrow\; \text{pattern\_size} = (N-1,\ M-1), \qquad 6 \times 9 \;\Longrightarrow\; (5,\ 8)$$</div>
+<div class="frame"><iframe src="w/find.html" title="findChessboardCorners step by step" loading="lazy"></iframe>
+<a class="open" href="w/find.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
+<pre class="code"><code>found, corners = cv2.findChessboardCorners(gray, (5, 8))</code></pre>
+</section>
+
+<section id="subpix">
+<div class="sec-head"><h2><span class="n">2</span>cornerSubPix</h2><button class="copy" data-id="subpix">Copy link</button></div>
+<p class="lead">At the true corner \(p\), every pixel \(q\) nearby gives \(\nabla I(q)\cdot(q-p)=0\): on an edge the gradient is perpendicular to the edge through \(p\), in a flat square it is zero. Solve for \(p\) by least squares, move the window, repeat.</p>
+<div class="formula">$$\Bigl(\sum_{q} \nabla I\,\nabla I^{T}\Bigr)\,p = \sum_{q} \nabla I\,\nabla I^{T}\,q$$
+$$\text{stop when } \lVert p_{k+1} - p_k \rVert &lt; 0.001 \text{ px or } k = 30, \qquad \text{winSize} = (11, 11) \Rightarrow 23 \times 23$$</div>
+<div class="frame"><iframe src="w/subpix.html" title="cornerSubPix iterations" loading="lazy"></iframe>
+<a class="open" href="w/subpix.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
+<pre class="code"><code>criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+corners = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)</code></pre>
+</section>
+<footer>Every visualization runs in the browser on a synthetic board and works offline.</footer>
+</main></div>
+<script>
+addEventListener('message',e=>{if(!e.data||typeof e.data.cvNotesHeight!=='number')return;
+document.querySelectorAll('iframe').forEach(f=>{if(f.contentWindow===e.source)f.style.height=(e.data.cvNotesHeight+8)+'px'})});
+document.querySelectorAll('.copy').forEach(b=>b.addEventListener('click',async()=>{
+const url=location.href.split('#')[0]+'#'+b.dataset.id;
+try{await navigator.clipboard.writeText(url);b.textContent='Link copied'}catch(_){prompt('Copy this link:',url)}
+setTimeout(()=>b.textContent='Copy link',1600)}));
+const links=[...document.querySelectorAll('nav li a')];
+if(window.IntersectionObserver){const io=new IntersectionObserver(es=>{es.forEach(en=>{if(en.isIntersecting){links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+en.target.id))}})},{rootMargin:'-30% 0px -60% 0px'});
+document.querySelectorAll('section').forEach(s=>io.observe(s))}
+</script>
+</body></html>

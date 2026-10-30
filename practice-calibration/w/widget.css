@@ -1,0 +1,26 @@
+:root{--ink:#18202B;--muted:#5B6573;--rule:rgba(24,32,43,.12);--surface:#EDF0F3;--l:#2F6FDE;--r:#E8692E;--win:#1D9E75;--bad:#C0392B;
+--font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--ink:#E6EAF0;--muted:#9AA4B2;--rule:rgba(230,234,240,.14);--surface:#1E2631;--l:#5B8FEA;--r:#F08A55;--win:#5DCAA5;--bad:#F07B6B;color-scheme:dark}}
+html,body{margin:0;background:transparent}
+body{font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);padding:2px}
+button,select{font:inherit;font-size:13px;padding:5px 12px;border-radius:8px;border:1px solid var(--rule);background:transparent;color:var(--ink);cursor:pointer}
+button:hover{background:var(--surface)}button.on{border-color:var(--ink);font-weight:600}
+button:focus-visible,input:focus-visible,select:focus-visible,canvas:focus-visible{outline:2px solid var(--l);outline-offset:2px}
+input[type=range]{accent-color:var(--ink);margin:0}
+canvas{display:block;width:100%;border-radius:8px}
+.bar{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin:10px 0 0;font-size:13px;color:var(--muted)}
+.bar label{display:flex;gap:8px;align-items:center}
+.bar input[type=range]{width:120px}
+.bar output,.mono{font-family:var(--font-mono);font-size:12px;color:var(--ink)}
+.lb{font-size:12px;color:var(--muted);margin:0 0 4px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.status{margin-top:10px;padding:8px 12px;border-left:4px solid var(--rule);background:var(--surface);border-radius:0 10px 10px 0;font-size:13px}
+.status.ok{border-left-color:var(--win)}.status.bad{border-left-color:var(--bad)}
+.status b.ok{color:var(--win)}.status b.bad{color:var(--bad)}
+.status .big{font-family:var(--font-mono);font-size:15px;font-weight:700}
+table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}
+th,td{padding:3px 6px;border-bottom:1px solid var(--rule);text-align:right;font-family:var(--font-mono)}
+th{font-family:inherit;font-weight:600;color:var(--muted)}
+.two.wide{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr)}
+.bar label{flex-wrap:wrap}
+@media (max-width:560px){.two,.two.wide{grid-template-columns:minmax(0,1fr)}}
