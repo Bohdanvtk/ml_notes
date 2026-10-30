@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cornerSubPix iterations</title>
+<link rel="stylesheet" href="widget.css">
+<script src="board.js"></script>
+</head>
+<body>
+<div class="two wide">
+<div><canvas id="cv" tabindex="0" style="touch-action:none;cursor:grab" aria-label="Magnified corner. Drag the orange start point; the path shows each iteration."></canvas>
+<p class="lb" style="margin-top:4px">drag the orange start point · square = search window</p></div>
+<div>
+<div class="bar" style="margin-top:0"><button id="step">Step</button><button id="run">Run</button><button id="reset">Reset</button></div>
+<div class="bar"><label>winSize <input id="win" type="range" min="3" max="15" value="11"><output id="winv"></output></label></div>
+<div class="status" id="st"></div>
+<div style="overflow-x:auto"><table id="tb"></table></div>
+</div>
+</div>
+<script>
+const B=Board,$=id=>document.getElementById(id),HALF=20,n=2*HALF+1,MAXIT=30,EPS=0.001;
+const R=B.render({ax:15,ay:-20,az:25,Z:300,blur:1.0,noise:0.01,seed:5}),T=R.truth[17],ix=Math.round(T.u),iy=Math.round(T.v);
+let start=[T.u+3.4,T.v-2.7],path=[],done=null,drag=false,W=0,cell=0,timer=null;
+const S=(u,v)=>[(u-ix+HALF+0.5)*cell,(v-iy+HALF+0.5)*cell],U=(x,y)=>[x/cell-HALF-0.5+ix,y/cell-HALF-0.5+iy];
+const win=()=>+$('win').value;
+function reset(){clearInterval(timer);path=[{p:start.slice(),shift:null}];done=null;draw()}
+function step(){if(done)return;const p=path[path.length-1].p,q=B.subpixStep(R.img,R.W,R.H,p,win());
+  if(!q){done='gradient matrix is singular';return draw()}
+  const sh=Math.hypot(q[0]-p[0],q[1]-p[1]);path.push({p:q,shift:sh});
+  if(sh<=EPS)done=`shift ${sh.toFixed(4)} px < eps = ${EPS}`;else if(path.length-1>=MAXIT)done=`max_iter = ${MAXIT} reached`;draw()}
+function draw(){
+  let c;[c,W]=B.prep($('cv'),1);cell=W/n;const cr=B.css('--r'),ok=B.css('--win'),cl=B.css('--l');
+  for(let j=-HALF;j<=HALF;j++)for(let i=-HALF;i<=HALF;i++){const g=Math.round(255*Math.max(0,Math.min(1,R.img[(iy+j)*R.W+ix+i])));c.fillStyle=`rgb(${g},${g},${g})`;c.fillRect((i+HALF)*cell,(j+HALF)*cell,cell+0.5,cell+0.5)}
+  const cur=path[path.length-1].p,w=win(),[cx,cy]=S(...cur);
+  c.strokeStyle=cl;c.lineWidth=2;c.setLineDash([6,4]);c.strokeRect(cx-(w+0.5)*cell,cy-(w+0.5)*cell,(2*w+1)*cell,(2*w+1)*cell);c.setLineDash([]);
+  c.strokeStyle=cr;c.lineWidth=2;c.beginPath();path.forEach((s,i)=>{const [x,y]=S(...s.p);i?c.lineTo(x,y):c.moveTo(x,y)});c.stroke();
+  path.forEach((s,i)=>{const [x,y]=S(...s.p);c.fillStyle=i?cr:'#fff';c.strokeStyle=cr;c.lineWidth=2;c.beginPath();c.arc(x,y,i?3:7,0,7);c.fill();c.stroke()});
+  const [tx,ty]=S(T.u,T.v);c.strokeStyle=ok;c.lineWidth=2.5;c.beginPath();c.moveTo(tx-9,ty);c.lineTo(tx+9,ty);c.moveTo(tx,ty-9);c.lineTo(tx,ty+9);c.stroke();
+  $('winv').textContent=`(${w}, ${w}) → ${2*w+1}×${2*w+1}`;
+  const err=Math.hypot(cur[0]-T.u,cur[1]-T.v),it=path.length-1;
+  $('st').className='status '+(done?'ok':'');
+  $('st').innerHTML=`iteration <b>${it}</b> · error to the true corner (green +): <span class="big">${err.toFixed(3)} px</span>${done?`<br>stop: ${done}`:''}`;
+  $('tb').innerHTML='<tr><th>iter</th><th>u</th><th>v</th><th>shift</th><th>error</th></tr>'+path.map((s,i)=>`<tr><td>${i}</td><td>${s.p[0].toFixed(3)}</td><td>${s.p[1].toFixed(3)}</td><td>${s.shift===null?'–':s.shift.toFixed(4)}</td><td>${Math.hypot(s.p[0]-T.u,s.p[1]-T.v).toFixed(3)}</td></tr>`).join('');
+}
+$('step').onclick=step;$('reset').onclick=reset;
+$('run').onclick=()=>{clearInterval(timer);timer=setInterval(()=>{step();if(done)clearInterval(timer)},450)};
+$('win').addEventListener('input',reset);
+const pos=e=>{const r=$('cv').getBoundingClientRect();return U((e.clientX-r.left)*W/r.width,(e.clientY-r.top)*W/r.width)};
+$('cv').addEventListener('pointerdown',e=>{drag=true;$('cv').setPointerCapture(e.pointerId);start=pos(e);reset()});
+$('cv').addEventListener('pointermove',e=>{if(!drag)return;const m=pos(e);start=[Math.max(ix-HALF+1,Math.min(ix+HALF-1,m[0])),Math.max(iy-HALF+1,Math.min(iy+HALF-1,m[1]))];reset()});
+$('cv').addEventListener('pointerup',()=>drag=false);
+$('cv').addEventListener('keydown',e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();step()}});
+if(window.ResizeObserver)new ResizeObserver(draw).observe(document.body);
+reset();B.postHeight();
+</script>
+</body></html>

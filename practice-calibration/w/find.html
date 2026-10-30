@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>findChessboardCorners step by step</title>
+<link rel="stylesheet" href="widget.css">
+<script src="board.js"></script>
+</head>
+<body>
+<div class="bar" style="margin-top:0" id="steps"></div>
+<canvas id="cv" style="margin-top:10px" aria-label="The board image at the selected step of the pipeline"></canvas>
+<div class="bar">
+<label>pattern_size <select id="pat"><option value="5,8">(5, 8)</option><option value="8,5">(8, 5)</option><option value="6,9">(6, 9)</option><option value="4,8">(4, 8)</option></select></label>
+<label>tilt Y <input id="ay" type="range" min="-40" max="40" value="-25"></label>
+<label>uneven light <input id="light" type="range" min="0" max="0.8" step="0.05" value="0.4"></label>
+</div>
+<div class="status" id="st"></div>
+<script>
+const B=Board,$=id=>document.getElementById(id);
+const STEPS=['1 · original','2 · adaptive threshold','3 · black quads','4 · glue quads','5 · ordered corners'];
+let step=4,R,F;
+$('steps').innerHTML=STEPS.map((s,i)=>`<button data-i="${i}">${s}</button>`).join('');
+document.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>{step=+b.dataset.i;draw()});
+function run(){R=B.render({ax:20,ay:+$('ay').value,az:8,Z:420,blur:0.9,noise:0.02,seed:4,light:+$('light').value});
+  F=B.find(R.img,R.W,R.H,$('pat').value.split(',').map(Number));draw()}
+['ay','light','pat'].forEach(id=>$(id).addEventListener('input',run));
+function draw(){
+  document.querySelectorAll('[data-i]').forEach(b=>b.classList.toggle('on',+b.dataset.i===step));
+  const [c,W,H]=B.prep($('cv'),0.75),s=W/R.W,S=p=>[p[0]*s,p[1]*s],ok=B.css('--win'),r=B.css('--r');
+  const src=step===1?B.toCanvas(null,R.W,R.H,i=>F.bin[i]?235:20):step===2||step===3?B.toCanvas(null,R.W,R.H,i=>F.eroded[i]?235:150):B.toCanvas(R.img,R.W,R.H);
+  c.drawImage(src,0,0,W,H);
+  if(step===2||step===3){F.quads.forEach(q=>{c.strokeStyle=r;c.lineWidth=2;c.beginPath();q.poly.forEach((p,i)=>i?c.lineTo(...S(p)):c.moveTo(...S(p)));c.closePath();c.stroke();
+    if(step===2){c.fillStyle=r;q.poly.forEach(p=>{c.beginPath();c.arc(...S(p),2.5,0,7);c.fill()})}})}
+  if(step===3)F.corners.forEach(p=>{c.fillStyle=ok;c.beginPath();c.arc(p.u*s,p.v*s,4,0,7);c.fill()});
+  if(step===4){if(F.found){B.drawOrder(c,F.ordered,F.pattern[0],S);c.fillStyle='#fff';c.font='bold 11px system-ui,sans-serif';
+      [0,1,F.pattern[0]].forEach(i=>{const [x,y]=S(F.ordered[i]);c.strokeStyle='#000';c.lineWidth=3;c.strokeText(i,x+6,y-6);c.fillText(i,x+6,y-6)})}
+    else F.corners.forEach(p=>{c.fillStyle=B.css('--bad');c.beginPath();c.arc(p.u*s,p.v*s,4,0,7);c.fill()})}
+  const info=[`the camera image (grey, with uneven light)`,
+    `pixel → black if darker than its local mean (window ${51}×${51}); uneven light does not matter`,
+    `black blobs shrunk by 1 px so diagonal squares separate; each blob → 4 vertices: <b>${F.quads.length}</b> quads`,
+    `a vertex close to a vertex of another quad = one inner corner: <b>${F.corners.length}</b> corners`,
+    F.found?`rows coloured like cv2.drawChessboardCorners: corner 0, 1, 2 … row by row`:`nothing to order`][step];
+  const st=$('st');st.className='status '+(F.found?'ok':'bad');
+  st.innerHTML=`${info}<br>found = <b class="${F.found?'ok':'bad'}">${F.found?'True':'False'}</b>${F.found?` · ${F.ordered.length} corners in order`:` · ${F.reason}`}`;
+}
+if(window.ResizeObserver)new ResizeObserver(()=>R&&draw()).observe(document.body);
+run();B.postHeight();
+</script>
+</body></html>
