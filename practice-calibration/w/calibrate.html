@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>calibrateCamera: inputs and outputs</title>
+<link rel="stylesheet" href="widget.css">
+<link rel="stylesheet" href="../../assets/katex/katex.min.css">
+<script src="../../assets/katex/katex.min.js"></script>
+<script src="calib.js"></script>
+<style>
+.tag{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:1px 7px;border-radius:999px;margin-right:6px;color:#fff;vertical-align:1px}
+.tag.in{background:var(--l)}.tag.out{background:var(--win)}
+.cards{display:grid;gap:10px}
+.cards.in3{grid-template-columns:minmax(0,1fr) minmax(0,1.6fr) minmax(0,.7fr)}
+.cards.out4{grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr) minmax(0,1fr)}
+.card{border:1px solid var(--rule);border-radius:10px;padding:8px 10px;min-width:0;overflow-x:auto}
+.card h4{margin:0 0 6px;font-size:13px;font-weight:600;font-family:var(--font-mono)}
+.card p{margin:4px 0 0;font-size:12px;color:var(--muted)}
+.card .katex-display{margin:4px 0}.card .katex{font-size:.95em}
+.call{margin:12px 0;padding:8px 12px;border-radius:10px;background:var(--surface);font-family:var(--font-mono);font-size:13px;text-align:center}
+.call b{color:var(--win)}
+.thumbs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}
+.thumbs canvas{border:2px solid transparent;border-radius:6px;cursor:pointer}
+.thumbs canvas.sel{border-color:var(--l)}
+.rms{font-family:var(--font-mono);font-size:28px;font-weight:700}
+.true{color:var(--muted)}
+@media (max-width:640px){.cards.in3,.cards.out4{grid-template-columns:minmax(0,1fr)}}
+</style>
+</head>
+<body>
+<p class="lb"><span class="tag in">in</span>what you give to calibrateCamera</p>
+<div class="cards in3">
+<div class="card"><h4>obj_points</h4><canvas id="obj" aria-label="Board corners in millimetres"></canvas><p>40 × (X, Y, 0) mm, step 21.5. The <b>same</b> array for every photo.</p></div>
+<div class="card"><h4>img_points</h4><div class="thumbs" id="thumbs"></div><p>40 × (u, v) px per photo, from findChessboardCorners + cornerSubPix. Click a photo.</p></div>
+<div class="card"><h4>image_size</h4><div class="rms" style="font-size:20px">(640, 480)</div><p>width, height in px</p></div>
+</div>
+<div class="bar">
+<label>photos <input id="n" type="range" min="3" max="10" value="6"><output id="nv"></output></label>
+<label>corner noise σ <input id="noise" type="range" min="0" max="1" step="0.05" value="0.2"><output id="sv"></output></label>
+<button id="seed">New noise</button>
+</div>
+<div class="call">rms, K, dist, rvecs, tvecs = <b>cv2.calibrateCamera</b>(obj_points, img_points, image_size, None, None)</div>
+<p class="lb"><span class="tag out">out</span>what it returns (grey = the true camera that took the photos)</p>
+<div class="cards out4">
+<div class="card"><h4>rms</h4><div class="rms" id="rms"></div><p id="rmsnote"></p><canvas id="hist" aria-label="RMS per optimisation step"></canvas></div>
+<div class="card"><h4>K</h4><div id="K"></div><h4 style="margin-top:6px">dist = (k1, k2, p1, p2, k3)</h4><div id="dist"></div></div>
+<div class="card"><h4 id="rvt">rvecs[i], tvecs[i]</h4><div id="ext"></div><p>pose of the board in photo i: rotation (Rodrigues vector) and translation in mm</p></div>
+</div>
+<div class="two" style="margin-top:12px">
+<div><p class="lb" id="phl"></p><canvas id="photo" aria-label="Selected photo with measured and reprojected corners"></canvas></div>
+<div><p class="lb">what the numbers mean</p><div class="status" id="expl" style="margin-top:0"></div>
+<div class="bar"><label><input type="checkbox" id="arr" checked> residuals ×30</label><label><input type="checkbox" id="straight"> grid without distortion</label></div></div>
+</div>
+<script>
+const C=Calib,T=C.TRUE,$=id=>document.getElementById(id);
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const prep=(cv,aspect)=>{const dpr=devicePixelRatio||1,w=cv.clientWidth,h=w*aspect;cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);cv.style.height=h+'px';const c=cv.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);return[c,w,h]};
+const K=(t,el)=>katex.render(t,el,{displayMode:true,throwOnError:false});
+let seed=3,ph,res,sel=0,timer=null;
+function run(){const n=+$('n').value,s=+$('noise').value;$('nv').textContent=n;$('sv').textContent=s.toFixed(2)+' px';
+  ph=C.photos(n,T,s,seed);res=C.calibrate(ph.map(p=>p.pts));sel=Math.min(sel,n-1);buildThumbs();draw()}
+// board outline drawn through a camera model, edges sampled so distortion bends them
+function drawBoard(c,cam,R,t,sc,straight){
+  const s=C.SQUARE,P=(X,Y)=>{const q=C.project(straight?{...cam,k1:0,k2:0}:cam,R,t,[X,Y,0]);return[q[0]*sc,q[1]*sc]};
+  const poly=(x0,y0,x1,y1,fill)=>{c.fillStyle=fill;c.beginPath();const N=8;
+    for(let i=0;i<=N;i++)c.lineTo(...P(x0+(x1-x0)*i/N,y0));for(let i=0;i<=N;i++)c.lineTo(...P(x1,y0+(y1-y0)*i/N));
+    for(let i=0;i<=N;i++)c.lineTo(...P(x1-(x1-x0)*i/N,y1));for(let i=0;i<=N;i++)c.lineTo(...P(x0,y1-(y1-y0)*i/N));c.fill()};
+  poly(-1.6*s,-1.6*s,5.6*s,8.6*s,'#ececec');
+  for(let r=-1;r<8;r++)for(let q=-1;q<5;q++)if(!((q+r)&1))poly(q*s,r*s,(q+1)*s,(r+1)*s,'#1c1c1c');
+}
+function buildThumbs(){const box=$('thumbs');box.innerHTML='';
+  ph.forEach((p,i)=>{const cv=document.createElement('canvas');cv.className=i===sel?'sel':'';cv.setAttribute('aria-label','photo '+i);cv.onclick=()=>{sel=i;buildThumbs();draw()};box.appendChild(cv);
+    requestAnimationFrame(()=>{const [c,w,h]=prep(cv,0.75);c.fillStyle='#8a8a8a';c.fillRect(0,0,w,h);drawBoard(c,T,p.R,p.t,w/640);
+      c.fillStyle=css('--l');p.pts.forEach(q=>{c.beginPath();c.arc(q[0]*w/640,q[1]*w/640,1.3,0,7);c.fill()})})})}
+function mat(est,tru){return`\\begin{bmatrix}${est[0]} & 0 & ${est[2]}\\\\ 0 & ${est[1]} & ${est[3]}\\\\ 0 & 0 & 1\\end{bmatrix}\\;\\color{gray}{\\begin{bmatrix}${tru[0]} & 0 & ${tru[2]}\\\\ 0 & ${tru[1]} & ${tru[3]}\\\\ 0 & 0 & 1\\end{bmatrix}}`}
+function draw(){
+  const ok=css('--win'),bl=css('--l'),or=css('--r'),mu=css('--muted'),E=res.K;
+  // obj_points
+  let [c,w,h]=prep($('obj'),0.9);const s=Math.min((w-60)/4,(h-40)/7),ox=40,oy=20;
+  c.strokeStyle=mu;c.lineWidth=1;for(let q=0;q<5;q++){c.beginPath();c.moveTo(ox+q*s,oy);c.lineTo(ox+q*s,oy+7*s);c.stroke()}for(let r=0;r<8;r++){c.beginPath();c.moveTo(ox,oy+r*s);c.lineTo(ox+4*s,oy+r*s);c.stroke()}
+  c.fillStyle=bl;for(let r=0;r<8;r++)for(let q=0;q<5;q++){c.beginPath();c.arc(ox+q*s,oy+r*s,2.5,0,7);c.fill()}
+  c.fillStyle=css('--ink');c.font='10px ui-monospace,monospace';c.fillText('(0,0,0)',ox-38,oy-8);c.fillText('X →',ox+4*s-14,oy+7*s+16);c.fillText('Y ↓',ox-24,oy+7*s);c.fillText('21.5',ox+s/2-10,oy-8);
+  // outputs
+  $('rms').textContent=res.rms.toFixed(3)+' px';$('rms').style.color=res.rms<=0.5?ok:css('--bad');
+  $('rmsnote').innerHTML=`√(mean ‖measured − reprojected‖²) over ${ph.length}×40 corners. ${res.rms<=0.5?'≤ 0.5 px: good.':'> 0.5 px: corners too noisy.'}`;
+  K(mat([E.fx,E.fy,E.cx,E.cy].map(v=>v.toFixed(1)),[T.fx,T.fy,T.cx,T.cy]),$('K'));
+  K(`\\begin{aligned}&(${E.k1.toFixed(3)},\\ ${E.k2.toFixed(3)},\\ 0,\\ 0,\\ 0)\\\\ &\\color{gray}{(${T.k1},\\ ${T.k2},\\ 0,\\ 0,\\ 0)}\\end{aligned}`,$('dist'));
+  const rv=res.rvecs[sel],tv=res.tvecs[sel],trv=C.rodrigues(ph[sel].R),ttv=ph[sel].t,f=v=>v.map(x=>x.toFixed(2)).join(',\\ '),f1=v=>v.map(x=>x.toFixed(1)).join(',\\ ');
+  $('rvt').textContent=`rvecs[${sel}], tvecs[${sel}]`;
+  K(`\\begin{aligned}\\text{rvec} &= (${f(rv)}) \\\\ &\\color{gray}{(${f(trv)})}\\\\[3pt] \\text{tvec} &= (${f1(tv)}) \\\\ &\\color{gray}{(${f1(ttv)})}\\end{aligned}`,$('ext'));
+  // LM history
+  [c,w,h]=prep($('hist'),0.38);const H=res.history,L=v=>Math.log10(Math.max(v,1e-4)),lo=L(Math.min(...H)),hi=L(H[0]),X=i=>8+i/(H.length-1)*(w-16),Y=v=>6+(hi-L(v))/(hi-lo||1)*(h-22);
+  c.strokeStyle=ok;c.lineWidth=2;c.beginPath();H.forEach((v,i)=>i?c.lineTo(X(i),Y(v)):c.moveTo(X(i),Y(v)));c.stroke();
+  c.fillStyle=mu;c.font='10px system-ui,sans-serif';c.fillText(`start (no distortion): ${H[0].toFixed(1)} px`,8,h-4);c.textAlign='right';c.fillText(`${H.length-1} LM steps →`,w-6,12);c.textAlign='left';
+  // selected photo
+  [c,w,h]=prep($('photo'),0.75);const sc=w/640,p=ph[sel],v=res.views[sel];
+  c.fillStyle='#8a8a8a';c.fillRect(0,0,w,h);drawBoard(c,T,p.R,p.t,sc);
+  if($('straight').checked){c.globalAlpha=0.45;drawBoard(c,{...E},v.R,v.t,sc,true);c.globalAlpha=1}
+  p.pts.forEach((q,j)=>{const r=res.reproj[sel][j];
+    if($('arr').checked){c.strokeStyle=or;c.lineWidth=2;c.beginPath();c.moveTo(r[0]*sc,r[1]*sc);c.lineTo((r[0]+30*(q[0]-r[0]))*sc,(r[1]+30*(q[1]-r[1]))*sc);c.stroke()}
+    c.fillStyle=bl;c.beginPath();c.arc(q[0]*sc,q[1]*sc,3,0,7);c.fill();
+    c.strokeStyle=ok;c.lineWidth=2;c.beginPath();c.moveTo(r[0]*sc-5,r[1]*sc);c.lineTo(r[0]*sc+5,r[1]*sc);c.moveTo(r[0]*sc,r[1]*sc-5);c.lineTo(r[0]*sc,r[1]*sc+5);c.stroke()});
+  $('phl').innerHTML=`photo ${sel}: <b style="color:var(--l)">●</b> img_points (measured) · <b style="color:var(--win)">+</b> obj_points projected with K, dist, rvec, tvec`;
+  $('expl').innerHTML=`<b>K</b>: f<sub>x</sub>, f<sub>y</sub> = focal length in px, (c<sub>x</sub>, c<sub>y</sub>) = where the optical axis hits the sensor.<br>
+  <b>dist</b>: k<sub>1</sub> &lt; 0 = barrel distortion, straight lines bend outwards near the edges (tick “grid without distortion”).<br>
+  <b>rms</b>: how far the green + are from the blue dots on average. The orange lines are those errors ×30.<br>
+  More photos or less noise → K closer to the grey true values.`;
+}
+['n','noise'].forEach(id=>$(id).addEventListener('input',()=>{clearTimeout(timer);timer=setTimeout(run,80)}));
+$('seed').onclick=()=>{seed++;run()};['arr','straight'].forEach(id=>$(id).addEventListener('input',draw));
+if(window.ResizeObserver)new ResizeObserver(()=>res&&draw()).observe(document.body);
+run();
+(function(){const post=()=>parent.postMessage({cvNotesHeight:Math.ceil(document.body.getBoundingClientRect().height)+8},'*');addEventListener('load',post);if(window.ResizeObserver)new ResizeObserver(post).observe(document.body);setTimeout(post,300)})();
+</script>
+</body></html>
