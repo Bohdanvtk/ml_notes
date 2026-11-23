@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Using H on any point</title>
+<link rel="stylesheet" href="widget.css">
+<link rel="stylesheet" href="../../assets/katex/katex.min.css">
+<script src="../../assets/katex/katex.min.js"></script>
+<script src="scene.js"></script>
+<style>.card+.card{margin-top:10px}.card .head{font-size:13.5px;color:var(--muted);margin:0 0 2px}#photo{touch-action:none;cursor:grab}</style>
+</head>
+<body>
+<div class="two">
+<div><p class="lb"><span class="tag in">photo</span>drag <b style="color:var(--r)">A</b> and <b style="color:var(--l)">B</b> onto the ends of a screw</p><canvas id="photo" aria-label="Photo with two draggable points"></canvas></div>
+<div><p class="lb"><span class="tag out">sheet</span>the same two points after H, in mm</p><canvas id="map" aria-label="Sheet in millimetres with the mapped points"></canvas></div>
+</div>
+<div class="bar"><button data-s="0">top M3×20</button><button data-s="1">bottom M3×20</button><button data-s="2">M4×30</button>
+<label>tilt <input id="t" type="range" min="-35" max="35" value="-22"></label></div>
+<div class="card" style="margin-top:10px"><p class="head">step 1 · multiply: pixel → homogeneous vector</p><div id="s1"></div></div>
+<div class="card"><p class="head">step 2 · divide by w: → millimetres on the sheet</p><div id="s2"></div></div>
+<div class="card"><p class="head">step 3 · measure in mm</p><div id="s3"></div></div>
+<script>
+const S=Scene,$=id=>document.getElementById(id);
+const K=(t,el)=>katex.render(t,el,{displayMode:true,throwOnError:false});
+let cam,H,pts,drag=-1,sc=1,sel=0;
+function setup(keep){cam=S.camera({d:300,tilt:+$('t').value,roll:8});const P=S.pairs(cam,false);H=S.homography(P.map(p=>p.px),P.map(p=>p.mm));
+  if(!keep)pts=S.screwEnds(S.SCREWS[sel]).map(q=>cam.project(q));}
+document.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{sel=+b.dataset.s;setup(false);draw()});
+$('t').addEventListener('input',()=>{setup(false);draw()});
+function draw(){
+  document.querySelectorAll('[data-s]').forEach(b=>b.classList.toggle('on',+b.dataset.s===sel));
+  const cols=[S.css('--r'),S.css('--l')],m=pts.map(p=>S.applyH(H,p));
+  let [c,W]=S.prep($('photo'),S.PHOTO.H/S.PHOTO.W);sc=W/S.PHOTO.W;S.drawPhoto(c,cam,sc);
+  c.strokeStyle='#fff';c.lineWidth=1.5;c.beginPath();c.moveTo(pts[0][0]*sc,pts[0][1]*sc);c.lineTo(pts[1][0]*sc,pts[1][1]*sc);c.stroke();
+  pts.forEach((p,i)=>S.dot(c,p[0]*sc,p[1]*sc,6,cols[i],i?'B':'A'));
+  let [g,MW,MH]=S.prep($('map'),297/210);const k=MW/210;g.fillStyle='#f6f6f3';g.fillRect(0,0,MW,MH);
+  g.strokeStyle=S.css('--rule');for(let x=0;x<=210;x+=10){g.beginPath();g.moveTo(x*k,0);g.lineTo(x*k,MH);g.stroke()}for(let y=0;y<=297;y+=10){g.beginPath();g.moveTo(0,y*k);g.lineTo(MW,y*k);g.stroke()}
+  S.MARKERS.forEach(mk=>{g.fillStyle='#111';g.fillRect(mk.x*k,mk.y*k,40*k,40*k)});
+  S.SCREWS.forEach(s=>{const e=S.screwEnds(s);g.strokeStyle='#bbb';g.lineWidth=s.d*k;g.beginPath();g.moveTo(e[0][0]*k,e[0][1]*k);g.lineTo(e[1][0]*k,e[1][1]*k);g.stroke()});
+  g.strokeStyle=S.css('--ink');g.lineWidth=1.5;g.beginPath();g.moveTo(m[0].X*k,m[0].Y*k);g.lineTo(m[1].X*k,m[1].Y*k);g.stroke();
+  m.forEach((q,i)=>S.dot(g,q.X*k,q.Y*k,5,cols[i],`${i?'B':'A'} (${q.X.toFixed(1)}, ${q.Y.toFixed(1)})`));
+  const Hs=`\\begin{bmatrix}${H.map(r=>r.map(S.fmt).join(' & ')).join('\\\\')}\\end{bmatrix}`,n1=v=>v.toFixed(1),cl=i=>(i?'#2F6FDE':'#E8692E');
+  K(pts.map((p,i)=>`\\color{${cl(i)}}{${i?'B':'A'}:}\\; \\begin{bmatrix}x'\\\\ y'\\\\ w\\end{bmatrix} = ${Hs}\\begin{bmatrix}${n1(p[0])}\\\\ ${n1(p[1])}\\\\ 1\\end{bmatrix} = \\begin{bmatrix}${m[i].xp.toFixed(3)}\\\\ ${m[i].yp.toFixed(3)}\\\\ ${m[i].w.toFixed(4)}\\end{bmatrix}`).join('\\\\[6pt]'),$('s1'));
+  K(m.map((q,i)=>`\\color{${cl(i)}}{${i?'B':'A'}:}\\; X = \\frac{x'}{w} = \\frac{${q.xp.toFixed(3)}}{${q.w.toFixed(4)}} = \\mathbf{${q.X.toFixed(2)}}\\ \\text{mm}, \\qquad Y = \\frac{y'}{w} = \\frac{${q.yp.toFixed(3)}}{${q.w.toFixed(4)}} = \\mathbf{${q.Y.toFixed(2)}}\\ \\text{mm}`).join('\\\\[4pt]'),$('s2'));
+  const Lmm=Math.hypot(m[1].X-m[0].X,m[1].Y-m[0].Y),Lpx=Math.hypot(pts[1][0]-pts[0][0],pts[1][1]-pts[0][1]);
+  K(`\\begin{aligned}\\text{with H:}\\quad &\\sqrt{(${m[1].X.toFixed(2)} - ${m[0].X.toFixed(2)})^2 + (${m[1].Y.toFixed(2)} - ${m[0].Y.toFixed(2)})^2} = \\boxed{\\mathbf{${Lmm.toFixed(2)}\\ \\text{mm}}}\\\\[4pt]
+  \\text{without:}\\quad &${Lpx.toFixed(0)}\\ \\text{px} \\div 10 = \\color{#C0392B}{${(Lpx/10).toFixed(1)}\\ \\text{mm}}\\end{aligned}`,$('s3'));
+}
+const pos=e=>{const r=$('photo').getBoundingClientRect();return[(e.clientX-r.left)/sc,(e.clientY-r.top)/sc]};
+$('photo').addEventListener('pointerdown',e=>{const q=pos(e);let b=-1,bd=40/sc;pts.forEach((p,i)=>{const d=Math.hypot(p[0]-q[0],p[1]-q[1]);if(d<bd){bd=d;b=i}});
+  drag=b<0?(Math.hypot(pts[0][0]-q[0],pts[0][1]-q[1])<Math.hypot(pts[1][0]-q[0],pts[1][1]-q[1])?0:1):b;pts[drag]=q;$('photo').setPointerCapture(e.pointerId);draw()});
+$('photo').addEventListener('pointermove',e=>{if(drag<0)return;pts[drag]=pos(e);draw()});
+$('photo').addEventListener('pointerup',()=>drag=-1);
+if(window.ResizeObserver)new ResizeObserver(draw).observe(document.body);
+setup(false);draw();S.postHeight();
+</script>
+</body></html>
