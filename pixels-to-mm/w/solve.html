@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>From 4 pairs to H</title>
+<link rel="stylesheet" href="widget.css">
+<link rel="stylesheet" href="../../assets/katex/katex.min.css">
+<script src="../../assets/katex/katex.min.js"></script>
+<script src="scene.js"></script>
+<style>.card+.card{margin-top:10px}.card .head{font-size:13.5px;color:var(--muted);margin:0 0 2px}#sys .katex{font-size:.92em}</style>
+</head>
+<body>
+<div class="bar" style="margin-top:0">
+<label>distance <input id="d" type="range" min="260" max="450" value="300"></label>
+<label>tilt <input id="t" type="range" min="-35" max="35" value="-22"></label>
+<label>roll <input id="r" type="range" min="-25" max="25" value="8"></label>
+</div>
+<div class="card" style="margin-top:10px"><p class="head"><span class="tag in">in</span>4 pairs: photo px (detector) ↔ sheet mm (json)</p><div id="pairs"></div></div>
+<div class="card"><p class="head">each pair gives 2 rows → 8 equations, 8 unknowns h₁₁ … h₃₂ (h₃₃ = 1)</p><div id="sys"></div></div>
+<div class="card"><p class="head"><span class="tag out">out</span>solve → H</p><div id="H"></div></div>
+<div class="card"><p class="head">check: H sends every detected corner exactly to its mm from the json</p><div id="chk"></div></div>
+<script>
+const S=Scene,$=id=>document.getElementById(id);
+const K=(t,el)=>katex.render(t,el,{displayMode:true,throwOnError:false});
+['d','t','r'].forEach(id=>$(id).addEventListener('input',draw));
+const col=i=>S.ID_COLORS[i];
+function draw(){
+  const cam=S.camera({d:+$('d').value,tilt:+$('t').value,roll:+$('r').value}),P=S.pairs(cam,false),H=S.homography(P.map(p=>p.px),P.map(p=>p.mm));
+  const n1=v=>v.toFixed(1);
+  K(P.map(p=>`\\color{${col(p.id)}}{\\text{id ${p.id}:}\\ (u, v) = (${n1(p.px[0])},\\ ${n1(p.px[1])}) \\;\\longleftrightarrow\\; (X, Y) = (${p.mm[0]},\\ ${p.mm[1]})}`).join('\\\\'),$('pairs'));
+  const rows=[],labels=[];P.forEach(p=>S.pairRows(p.px,p.mm).forEach((r,k)=>{rows.push(r);labels.push(`\\color{${col(p.id)}}{\\text{id ${p.id}, ${k?'Y':'X'}}}`)}));
+  K(`\\begin{array}{r} ${labels.join('\\\\')} \\end{array}\\;
+  \\underbrace{\\begin{bmatrix}${rows.map(r=>r.a.map(S.fmt).join(' & ')).join('\\\\')}\\end{bmatrix}}_{A\\ (8\\times 8)}
+  \\begin{bmatrix}h_{11}\\\\ h_{12}\\\\ h_{13}\\\\ h_{21}\\\\ h_{22}\\\\ h_{23}\\\\ h_{31}\\\\ h_{32}\\end{bmatrix}
+  = \\underbrace{\\begin{bmatrix}${rows.map(r=>S.fmt(r.b)).join('\\\\')}\\end{bmatrix}}_{\\mathbf b}`,$('sys'));
+  K(`H = \\begin{bmatrix}${H.map(r=>r.map(S.fmt).join(' & ')).join('\\\\')}\\end{bmatrix}
+  \\qquad \\begin{aligned}&h_{11}, h_{22} \\approx \\text{mm per px (scale)},\\\\ &h_{13}, h_{23} = \\text{shift},\\ \\ h_{31}, h_{32} = \\text{perspective}\\end{aligned}`,$('H'));
+  K(P.map(p=>{const a=S.applyH(H,p.px);return `\\color{${col(p.id)}}{H\\begin{bmatrix}${n1(p.px[0])}\\\\ ${n1(p.px[1])}\\\\ 1\\end{bmatrix} = \\begin{bmatrix}${a.xp.toFixed(3)}\\\\ ${a.yp.toFixed(3)}\\\\ ${a.w.toFixed(4)}\\end{bmatrix} \\xrightarrow{\\ \\div w\\ } (${a.X.toFixed(2)},\\ ${a.Y.toFixed(2)})\\ \\text{mm}}`}).join('\\\\[2pt]'),$('chk'));
+}
+draw();S.postHeight();
+</script>
+</body></html>

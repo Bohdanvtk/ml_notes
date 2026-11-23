@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The map and the photo</title>
+<link rel="stylesheet" href="widget.css">
+<script src="scene.js"></script>
+<style>.three{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.62fr) minmax(0,1fr);gap:12px;align-items:start}
+@media (max-width:640px){.three{grid-template-columns:minmax(0,1fr)}}
+td.id{font-weight:700}</style>
+</head>
+<body>
+<div class="three">
+<div><p class="lb"><span class="tag json">json</span><b>the map</b> · sheet_layout.json, in mm</p><canvas id="map" aria-label="The sheet in millimetres with the marker corners"></canvas></div>
+<div><p class="lb">sheet_layout.json</p><pre class="json" id="json"></pre><p class="lb" style="margin-top:8px">never changes: you printed the sheet yourself</p></div>
+<div><p class="lb"><span class="tag in">photo</span><b>found by the detector</b>, in px</p><canvas id="photo" aria-label="Photo with detected marker corners"></canvas></div>
+</div>
+<div class="bar">
+<label>distance <input id="d" type="range" min="260" max="450" value="300"></label>
+<label>tilt <input id="t" type="range" min="-35" max="35" value="-22"></label>
+<label>roll <input id="r" type="range" min="-25" max="25" value="8"></label>
+<label><input type="checkbox" id="all"> all 16 corners</label>
+</div>
+<table id="tb"></table>
+<div class="status" id="st"></div>
+<script>
+const S=Scene,$=id=>document.getElementById(id);
+['d','t','r','all'].forEach(id=>$(id).addEventListener('input',draw));
+const lay=S.LAYOUT;
+function draw(){
+  const all=$('all').checked,cam=S.camera({d:+$('d').value,tilt:+$('t').value,roll:+$('r').value}),P=S.pairs(cam,all);
+  // json with each marker line in its colour
+  $('json').innerHTML=`{\n  "paper": "A4",\n  "size_mm": [210, 297],\n  "marker_mm": 40,\n  "markers": {\n`+
+    S.MARKERS.map((m,i)=>`    <b style="color:${S.ID_COLORS[i]}">"${m.id}": [${m.x}, ${m.y}]</b>${i<3?',':''}`).join('\n')+`\n  }\n}`;
+  // map
+  let [c,W,H]=S.prep($('map'),297/210);const k=W/210;
+  c.fillStyle='#f6f6f3';c.fillRect(0,0,W,H);c.strokeStyle=S.css('--rule');c.lineWidth=1;
+  for(let x=0;x<=210;x+=10){c.beginPath();c.moveTo(x*k,0);c.lineTo(x*k,H);c.stroke()}for(let y=0;y<=297;y+=10){c.beginPath();c.moveTo(0,y*k);c.lineTo(W,y*k);c.stroke()}
+  S.MARKERS.forEach(m=>{c.fillStyle='#111';c.fillRect(m.x*k,m.y*k,40*k,40*k);const q=40/6*k;c.fillStyle='#f6f6f3';m.bits.forEach((row,r)=>row.forEach((b,j)=>{if(b)c.fillRect(m.x*k+(j+1)*q,m.y*k+(r+1)*q,q,q)}))});
+  S.SCREWS.forEach(s=>{const e=S.screwEnds(s);c.strokeStyle='#2a2a2a';c.lineWidth=s.d*k;c.beginPath();c.moveTo(e[0][0]*k,e[0][1]*k);c.lineTo(e[1][0]*k,e[1][1]*k);c.stroke()});
+  c.fillStyle=S.css('--muted');c.font='11px system-ui,sans-serif';c.fillText('0',2,11);c.fillText('210 mm →',W-58,11);c.fillText('297 mm ↓',2,H-4);
+  P.forEach(p=>S.dot(c,p.mm[0]*k,p.mm[1]*k,4.5,S.ID_COLORS[p.id],p.corner===0?`${p.id}: (${p.mm[0]}, ${p.mm[1]})`:''));
+  // photo
+  let [ph,PW]=S.prep($('photo'),S.PHOTO.H/S.PHOTO.W);const sc=PW/S.PHOTO.W;S.drawPhoto(ph,cam,sc);
+  P.forEach(p=>S.dot(ph,p.px[0]*sc,p.px[1]*sc,4.5,S.ID_COLORS[p.id],p.corner===0?`${p.id}: (${p.px[0].toFixed(0)}, ${p.px[1].toFixed(0)})`:''));
+  const cn=['TL','TR','BR','BL'];
+  $('tb').innerHTML='<tr><th>marker id</th><th>corner</th><th>on the photo (px) · detector</th><th></th><th>on the sheet (mm) · json</th></tr>'+
+    P.map(p=>`<tr><td class="id" style="color:${S.ID_COLORS[p.id]};text-align:center">${p.id}</td><td>${cn[p.corner]}</td><td>(${p.px[0].toFixed(1)}, ${p.px[1].toFixed(1)})</td><td style="text-align:center">↔</td><td>(${p.mm[0]}, ${p.mm[1]})</td></tr>`).join('');
+  $('st').className='status ok';
+  $('st').innerHTML=`<b>${P.length} pairs</b> “here on the photo ↔ here on the sheet”. Move the phone: the px column changes, the mm column never does.<br>
+  The id inside each marker says which row of the json it belongs to, so the pairs are never mixed up.${all?' ArUco gives 4 corners per marker: 16 pairs, and least squares averages out small detection errors.':' One corner per marker = the minimum 4 pairs.'}`;
+}
+if(window.ResizeObserver)new ResizeObserver(draw).observe(document.body);
+draw();S.postHeight();
+</script>
+</body></html>

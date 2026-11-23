@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Obstacle 1: distance</title>
+<link rel="stylesheet" href="widget.css">
+<script src="scene.js"></script>
+</head>
+<body>
+<div class="two">
+<div><p class="lb"><b>side view</b> · phone above the table</p><canvas id="side" aria-label="Side view of the phone above a screw"></canvas></div>
+<div><p class="lb"><b>the photo</b> · what the phone sees</p><canvas id="photo" aria-label="Photo of the screw"></canvas></div>
+</div>
+<div class="bar">
+<label>height Z <input id="h" type="range" min="150" max="500" step="5" value="300"><output id="hv"></output></label>
+<button data-h="200">20 cm</button><button data-h="300">30 cm</button><button data-h="400">40 cm</button>
+</div>
+<div class="status" id="st"></div>
+<script>
+const S=Scene,$=id=>document.getElementById(id),L=20;
+const scr={name:'M3×20',x:105-L/2,y:148.5,ang:0,L,d:3};
+document.querySelectorAll('[data-h]').forEach(b=>b.onclick=()=>{$('h').value=b.dataset.h;draw()});
+$('h').addEventListener('input',draw);
+function draw(){
+  const h=+$('h').value,f=S.PHOTO.f,s=f/h,Lpx=s*L,naive=Lpx/10,cam=S.camera({d:h}),ok=S.css('--win'),r=S.css('--r'),bad=S.css('--bad'),ink=S.css('--ink'),mu=S.css('--muted');
+  $('hv').textContent=(h/10).toFixed(1)+' cm';
+  document.querySelectorAll('[data-h]').forEach(b=>b.classList.toggle('on',+b.dataset.h===h));
+  // side view: 1 canvas px = k mm
+  let [c,W,Hh]=S.prep($('side'),1.1);const k=(Hh-40)/520,ty=Hh-24,cx=W/2,cy=ty-h*k,half=h*S.PHOTO.W/2/f;
+  c.fillStyle=S.css('--surface');c.fillRect(0,ty,W,Hh-ty);c.strokeStyle=mu;c.beginPath();c.moveTo(0,ty);c.lineTo(W,ty);c.stroke();
+  c.fillStyle='rgba(47,111,222,.10)';c.beginPath();c.moveTo(cx,cy);c.lineTo(cx-half*k,ty);c.lineTo(cx+half*k,ty);c.closePath();c.fill();
+  c.fillStyle=ink;c.fillRect(cx-14,cy-8,28,8);
+  c.strokeStyle=r;c.lineWidth=1.5;[-L/2,L/2].forEach(x=>{c.beginPath();c.moveTo(cx,cy);c.lineTo(cx+x*k*4,ty);c.stroke()});
+  c.fillStyle='#2a2a2a';c.fillRect(cx-L/2*k*4,ty-4,L*k*4,4);
+  c.strokeStyle=mu;c.setLineDash([3,3]);c.beginPath();c.moveTo(cx+26,cy);c.lineTo(cx+26,ty);c.stroke();c.setLineDash([]);
+  c.fillStyle=ink;c.font='600 13px system-ui,sans-serif';c.fillText(`Z = ${(h/10).toFixed(1)} cm`,cx+32,(cy+ty)/2);
+  c.fillStyle=mu;c.font='12px system-ui,sans-serif';c.fillText('screw (drawn 4× wider)',cx-60,ty+16);c.fillText('phone',cx-18,cy-12);
+  // photo
+  let [p,PW,PH]=S.prep($('photo'),S.PHOTO.H/S.PHOTO.W);const sc=PW/S.PHOTO.W;
+  S.drawPhoto(p,cam,sc,{markers:false,ruler:false,dashed:false,screws:false,table:'#8f8578'});
+  p.fillStyle='#8f8578';p.fillRect(0,0,PW,PH);S.drawScrew(p,cam,scr,sc);
+  const e=S.screwEnds(scr).map(q=>cam.project(q));const y=e[0][1]*sc-22;
+  p.strokeStyle=r;p.lineWidth=2;p.beginPath();p.moveTo(e[0][0]*sc,y);p.lineTo(e[1][0]*sc,y);p.moveTo(e[0][0]*sc,y-6);p.lineTo(e[0][0]*sc,y+6);p.moveTo(e[1][0]*sc,y-6);p.lineTo(e[1][0]*sc,y+6);p.stroke();
+  p.font='700 15px ui-monospace,monospace';p.textAlign='center';p.lineWidth=4;p.strokeStyle='#fff';p.strokeText(`${Lpx.toFixed(0)} px`,(e[0][0]+e[1][0])/2*sc,y-10);p.fillStyle=r;p.fillText(`${Lpx.toFixed(0)} px`,(e[0][0]+e[1][0])/2*sc,y-10);p.textAlign='left';
+  p.fillStyle='rgba(255,255,255,.85)';p.font='12px system-ui,sans-serif';p.fillText(`photo ${S.PHOTO.W} × ${S.PHOTO.H} px`,8,PH-8);
+  const err=naive-L,good=Math.abs(err)<0.05;
+  $('st').className='status '+(good?'ok':'bad');
+  $('st').innerHTML=`pixels per mm: &nbsp;s = f / Z = ${f} / ${h} = <span class="big">${s.toFixed(1)} px/mm</span> &nbsp;→&nbsp; the 20 mm screw is <span class="big">${Lpx.toFixed(0)} px</span><br>
+  <b>without a reference</b> you would assume one fixed scale, e.g. 10 px/mm (true only at 30 cm): ${Lpx.toFixed(0)} / 10 = <span class="big ${good?'ok':'bad'}">${naive.toFixed(1)} mm</span> ${good?'✓ lucky: exactly the height where 10 px/mm was measured':`✗ off by ${err>0?'+':''}${err.toFixed(1)} mm (${(100*err/L).toFixed(0)} %)`}`;
+}
+if(window.ResizeObserver)new ResizeObserver(draw).observe(document.body);
+draw();S.postHeight();
+</script>
+</body></html>

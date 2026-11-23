@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pixels to millimetres · ML notes</title>
+<meta name="description" content="A phone photo as a ruler: why pixels are not millimetres (distance, tilt, lens), and how a sheet with 4 ArUco markers fixes distance and tilt with one 3×3 homography.">
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<style>.formula{font-size:17px}.formula .katex{font-size:1.12em}.formula p{font-size:15px}</style>
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/auto-render.min.js" onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'\\(',right:'\\)',display:false}],throwOnError:false})"></script></head>
+<body><div class="layout">
+<nav aria-label="Sections"><a class="back" href="../">All topics</a><ol><li><a href="#distance">Obstacle 1 · distance</a></li><li><a href="#tilt">Obstacle 2 · tilt</a></li><li><a href="#lens">Obstacle 3 · lens</a></li><li><a href="#map">The map: sheet_layout.json</a></li><li><a href="#solve">From 4 pairs to H</a></li><li><a href="#apply">Using H on one point</a></li><li><a href="#rectify">Rectify the whole photo</a></li><li><a href="#code">In code</a></li></ol></nav>
+<main>
+<header class="top"><h1>Pixels to millimetres</h1>
+<p>Goal: a phone photo that works as a ruler. Put screws on a printed sheet, take a photo, get “3 mm thick, 20 mm long”. Measuring in pixels is easy; the hard part is the number of pixels in one millimetre.</p>
+<div class="legend"><span style="color:#2F6FDE">marker 0</span><span style="color:#E8692E">marker 1</span><span style="color:#1D9E75">marker 2</span><span style="color:#B04FC4">marker 3</span></div>
+</header>
+
+<section id="distance">
+<div class="sec-head"><h2><span class="n">1</span>Obstacle 1 · distance</h2><button class="copy" data-id="distance">Copy link</button></div>
+<p class="lead">Raise the phone and the same screw gets smaller on the photo. How many pixels one millimetre is depends on the height \(Z\), which you never know exactly.</p>
+<div class="formula">$$L_{\text{px}} = \frac{f \cdot L_{\text{mm}}}{Z} \quad\Longrightarrow\quad s = \frac{L_{\text{px}}}{L_{\text{mm}}} = \frac{f}{Z}\ \ \text{px/mm}$$
+<p>\(f\) = focal length in pixels (here 3000). Twice as high → half as many pixels per mm.</p></div>
+<div class="frame"><iframe src="w/distance.html" title="Obstacle 1: distance" loading="lazy"></iframe>
+<a class="open" href="w/distance.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
+</section>
+
+<section id="tilt">
+<div class="sec-head"><h2><span class="n">2</span>Obstacle 2 · tilt</h2><button class="copy" data-id="tilt">Copy link</button></div>
+<p class="lead">A hand-held phone is always tilted a little. Then the far part of the sheet is deeper than the near part: the rectangle becomes a trapezoid, and the scale is different in every part of the photo.</p>
+<div class="formula">$$s(u, v) = \frac{f}{Z(u, v)} \qquad Z_{\text{far}} &gt; Z_{\text{near}} \;\Longrightarrow\; s_{\text{far}} &lt; s_{\text{near}}$$
+<p>No single “px per mm” is correct for the whole photo.</p></div>
+<div class="frame"><iframe src="w/tilt.html" title="Obstacle 2: tilt" loading="lazy"></iframe>
+<a class="open" href="w/tilt.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
+</section>
+
+<section id="lens">
+<div class="sec-head"><h2><span class="n">3</span>Obstacle 3 · lens</h2><button class="copy" data-id="lens">Copy link</button></div>
+<p class="lead">The glass bends the picture, most near the edges: straight lines become slight arcs. Phones correct most of it themselves, so what is left is usually small.</p>
+<div class="formula">$$x_d = x\,(1 + k_1 r^2 + k_2 r^4), \qquad y_d = y\,(1 + k_1 r^2 + k_2 r^4), \qquad r^2 = x^2 + y^2$$
+<p>A homography keeps straight lines straight, so it can fix obstacles 1 and 2 but not this one.</p></div>
+<div class="frame"><iframe src="w/lens.html" title="Obstacle 3: lens" loading="lazy"></iframe>
+<a class="open" href="w/lens.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
+</section>
+
+<section id="map">
+<div class="sec-head"><h2><span class="n">4</span>The map: sheet_layout.json</h2><button class="copy" data-id="map">Copy link</button></div>
+<p class="lead">Like four monuments on a city map: we drew the sheet, so we know where every marker is in mm (the json). The detector finds the same corners on the photo in px. Each marker's id says which json row it belongs to.</p>
+<div class="formula">$$\underbrace{(u_k,\ v_k)}_{\text{photo, px · detector}} \;\longleftrightarrow\; \underbrace{(X_k,\ Y_k)}_{\text{sheet, mm · json}}, \qquad k = 0, 1, 2, 3$$</div>
+<div class="frame"><iframe src="w/pairs.html" title="The map and the photo" loading="lazy"></iframe>
+<a class="open" href="w/pairs.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
+</section>
+
+<section id="solve">
+<div class="sec-head"><h2><span class="n">5</span>From 4 pairs to H</h2><button class="copy" data-id="solve">Copy link</button></div>
+<p class="lead">A homography is one 3×3 table that sends any photo pixel to mm on the sheet. It has 8 unknowns; every pair gives 2 equations, so 4 pairs are exactly enough.</p>
+<div class="formula"><p>The map: multiply, then divide by the third number</p>
+$$\begin{bmatrix}x'\\ y'\\ w\end{bmatrix} = \underbrace{\begin{bmatrix}h_{11} &amp; h_{12} &amp; h_{13}\\ h_{21} &amp; h_{22} &amp; h_{23}\\ h_{31} &amp; h_{32} &amp; 1\end{bmatrix}}_{H}\begin{bmatrix}u\\ v\\ 1\end{bmatrix}, \qquad X = \frac{x'}{w}, \quad Y = \frac{y'}{w}$$
+<p>The division by \(w\) is what lets far parts of the photo get a different scale than near parts.</p></div>
+<div class="formula"><p>One pair → two linear equations (multiply out the fractions)</p>
+$$X = \frac{h_{11}u + h_{12}v + h_{13}}{h_{31}u + h_{32}v + 1} \;\Longrightarrow\; h_{11}u + h_{12}v + h_{13} - h_{31}\,uX - h_{32}\,vX = X$$
+$$Y = \frac{h_{21}u + h_{22}v + h_{23}}{h_{31}u + h_{32}v + 1} \;\Longrightarrow\; h_{21}u + h_{22}v + h_{23} - h_{31}\,uY - h_{32}\,vY = Y$$
+<p>Stack the rows of the 4 pairs: \(A\,\mathbf h = \mathbf b\) with \(A\) of size 8×8. Solve it once per photo.</p></div>
+<div class="frame"><iframe src="w/solve.html" title="From 4 pairs to H" loading="lazy"></iframe>
+<a class="open" href="w/solve.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
+</section>
+
+<section id="apply">
+<div class="sec-head"><h2><span class="n">6</span>Using H on one point</h2><button class="copy" data-id="apply">Copy link</button></div>
+<p class="lead">With H known, every pixel of the photo has a place on the sheet. Send both ends of a screw through H, then measure in mm.</p>
+<div class="formula">$$\text{pixel } (u, v) \xrightarrow{\ \times H\ } (x', y', w) \xrightarrow{\ \div w\ } (X, Y)\ \text{mm}, \qquad L = \sqrt{(X_B - X_A)^2 + (Y_B - Y_A)^2}$$</div>
+<div class="frame"><iframe src="w/apply.html" title="Using H on any point" loading="lazy"></iframe>
+<a class="open" href="w/apply.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
+</section>
+
+<section id="rectify">
+<div class="sec-head"><h2><span class="n">7</span>Rectify the whole photo</h2><button class="copy" data-id="rectify">Copy link</button></div>
+<p class="lead">Apply H to the whole photo and you get a view from straight above: the trapezoid is a rectangle again and the scale is the same everywhere. Obstacles 1 and 2 are gone; only the lens is left.</p>
+<div class="formula"><p>Warping: every pixel of the top view asks where it came from</p>
+$$\text{top-view pixel } (i, j) \;\longrightarrow\; (X, Y) = \Bigl(\frac{i}{10},\ \frac{j}{10}\Bigr)\ \text{mm}$$
+$$(X, Y) \;\xrightarrow{\ \times H^{-1},\ \div w\ }\; (u, v) \text{ on the photo} \;\longrightarrow\; \text{copy its colour to } (i, j)$$
+<p>10 px = 1 mm, so an A4 sheet becomes 2100 × 2970 px.</p></div>
+<div class="frame"><iframe src="w/rectify.html" title="Rectify the whole photo" loading="lazy"></iframe>
+<a class="open" href="w/rectify.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
+</section>
+
+<section id="code">
+<div class="sec-head"><h2><span class="n">8</span>In code</h2><button class="copy" data-id="code">Copy link</button></div>
+<p class="lead">The core of <code>rectify.py</code>. Here H maps straight to top-view pixels, so the mm from the json are multiplied by 10.</p>
+<pre class="code"><code>import json
+import cv2
+import numpy as np
+
+layout = json.load(open("sheet_layout.json"))        # marker id -> top-left corner in mm
+img = cv2.imread("photo.jpg")
+gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+# 1. find the markers: 4 corners each (TL, TR, BR, BL) in px, plus their ids
+aruco = cv2.aruco
+detector = aruco.ArucoDetector(aruco.getPredefinedDictionary(aruco.DICT_4X4_50))  # the dictionary the sheet was made with
+corners, ids, _ = detector.detectMarkers(gray)
+
+# 2. pairs: top-left corner on the photo (px)  <->  the same corner on the sheet (mm, from the json)
+src = np.array([c[0][0] for c in corners], np.float32)
+dst = np.array([layout["markers"][str(i)] for i in ids.flatten()], np.float32)
+
+# 3. homography: photo px -> top-view px (10 px = 1 mm)
+H, _ = cv2.findHomography(src, dst * 10)
+
+# 4. warp the whole photo into the top view: 210 x 297 mm = 2100 x 2970 px
+top = cv2.warpPerspective(img, H, (2100, 2970))</code></pre>
+</section>
+<footer>Sheet layout as in sheet.pdf (A4, 40 mm ArUco markers at 10 mm from the edges). Every visualization runs in the browser on a synthetic photo and works offline.</footer>
+</main></div>
+<script>
+addEventListener('message',e=>{if(!e.data||typeof e.data.cvNotesHeight!=='number')return;
+document.querySelectorAll('iframe').forEach(f=>{if(f.contentWindow===e.source)f.style.height=(e.data.cvNotesHeight+8)+'px'})});
+document.querySelectorAll('.copy').forEach(b=>b.addEventListener('click',async()=>{
+const url=location.href.split('#')[0]+'#'+b.dataset.id;
+try{await navigator.clipboard.writeText(url);b.textContent='Link copied'}catch(_){prompt('Copy this link:',url)}
+setTimeout(()=>b.textContent='Copy link',1600)}));
+const links=[...document.querySelectorAll('nav li a')];
+if(window.IntersectionObserver){const io=new IntersectionObserver(es=>{es.forEach(en=>{if(en.isIntersecting){links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+en.target.id))}})},{rootMargin:'-30% 0px -60% 0px'});
+document.querySelectorAll('section').forEach(s=>io.observe(s))}
+</script>
+</body></html>

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Obstacle 2: tilt</title>
+<link rel="stylesheet" href="widget.css">
+<script src="scene.js"></script>
+</head>
+<body>
+<div class="two">
+<div><p class="lb"><b>side view</b> · the phone is tilted, so the two screws are at different depths Z</p><canvas id="side" aria-label="Side view of the tilted phone"></canvas></div>
+<div><p class="lb"><b>the photo</b> · the sheet becomes a trapezoid</p><canvas id="photo" aria-label="Photo of the tilted sheet with two identical screws"></canvas></div>
+</div>
+<div class="bar"><label>tilt <input id="t" type="range" min="-35" max="35" value="-22"><output id="tv"></output></label></div>
+<div class="status" id="st"></div>
+<script>
+const S=Scene,$=id=>document.getElementById(id);
+$('t').addEventListener('input',draw);
+function draw(){
+  const t=+$('t').value,cam=S.camera({d:300,tilt:t}),f=cam.f,ok=S.css('--win'),r=S.css('--r'),ink=S.css('--ink'),mu=S.css('--muted'),bl=S.css('--l');
+  $('tv').textContent=t+'°';
+  const A=S.SCREWS[0],B=S.SCREWS[1],info=[A,B].map(s=>{const e=S.screwEnds(s),pe=e.map(q=>cam.project(q)),mid=[(e[0][0]+e[1][0])/2,(e[0][1]+e[1][1])/2];
+    const Z=cam.depth(mid),Lpx=Math.hypot(pe[1][0]-pe[0][0],pe[1][1]-pe[0][1]);return{s,pe,Z,Lpx,sc:Lpx/s.L}});
+  // side view: horizontal axis = sheet Y (mm), vertical = height above the table
+  let [c,W,H]=S.prep($('side'),1.1);const k=(W-40)/420,ox=20+60*k,ty=H-30,X=y=>ox+y*k,Yh=z=>ty+z*k;   // z<0 is above the table
+  c.fillStyle=S.css('--surface');c.fillRect(0,ty,W,H-ty);c.strokeStyle=mu;c.beginPath();c.moveTo(0,ty);c.lineTo(W,ty);c.stroke();
+  c.fillStyle='#d9d9d4';c.fillRect(X(0),ty-3,297*k,3);
+  const C=cam.C,ax=[cam.R[2][1],cam.R[2][2]];
+  c.save();c.translate(X(C[1]),Yh(C[2]));c.rotate(Math.atan2(ax[1],ax[0])-Math.PI/2);c.fillStyle=ink;c.fillRect(-16,-10,32,8);c.restore();
+  c.strokeStyle=mu;c.setLineDash([4,4]);c.beginPath();c.moveTo(X(C[1]),Yh(C[2]));c.lineTo(X(C[1]+ax[0]*330),Yh(C[2]+ax[1]*330));c.stroke();c.setLineDash([]);
+  info.forEach((o,i)=>{const y=o.s.y;c.strokeStyle=i?bl:r;c.lineWidth=2;c.beginPath();c.moveTo(X(C[1]),Yh(C[2]));c.lineTo(X(y+10),ty);c.stroke();
+    c.fillStyle='#2a2a2a';c.fillRect(X(y),ty-5,8,5);
+    c.fillStyle=i?bl:r;c.font='600 13px system-ui,sans-serif';c.fillText(`Z = ${o.Z.toFixed(0)} mm`,X(y+10)+(i?6:-92),ty-26-i*0)});
+  c.fillStyle=mu;c.font='12px system-ui,sans-serif';c.fillText('sheet (seen from the side)',X(60),ty+18);c.fillText('top screw',X(80),ty-8);c.fillText('bottom screw',X(185),ty-8);
+  // photo
+  let [p,PW,PH]=S.prep($('photo'),S.PHOTO.H/S.PHOTO.W);const sc=PW/S.PHOTO.W;S.drawPhoto(p,cam,sc);
+  info.forEach((o,i)=>{const col=i?bl:r,[a,b]=o.pe,y=Math.min(a[1],b[1])*sc-14;
+    p.strokeStyle=col;p.lineWidth=2.5;p.beginPath();p.moveTo(a[0]*sc,y);p.lineTo(b[0]*sc,y);p.stroke();
+    p.font='700 14px ui-monospace,monospace';p.lineWidth=4;p.strokeStyle='#fff';p.strokeText(`${o.Lpx.toFixed(0)} px`,b[0]*sc+8,y+5);p.fillStyle=col;p.fillText(`${o.Lpx.toFixed(0)} px`,b[0]*sc+8,y+5)});
+  const wTop=Math.hypot(...[0,1].map(i=>cam.project([210,0])[i]-cam.project([0,0])[i])),wBot=Math.hypot(...[0,1].map(i=>cam.project([210,297])[i]-cam.project([0,297])[i]));
+  $('st').className='status '+(Math.abs(info[0].Lpx-info[1].Lpx)<1?'ok':'bad');
+  $('st').innerHTML=`sheet width on the photo: top <span class="big">${wTop.toFixed(0)} px</span>, bottom <span class="big">${wBot.toFixed(0)} px</span> (both are 210 mm)<br>
+  <span style="color:var(--r)">top M3×20</span>: Z = ${info[0].Z.toFixed(0)} mm → ${info[0].sc.toFixed(2)} px/mm → ${info[0].Lpx.toFixed(0)} px → ÷10 = <span class="big">${(info[0].Lpx/10).toFixed(1)} mm</span><br>
+  <span style="color:var(--l)">bottom M3×20</span>: Z = ${info[1].Z.toFixed(0)} mm → ${info[1].sc.toFixed(2)} px/mm → ${info[1].Lpx.toFixed(0)} px → ÷10 = <span class="big">${(info[1].Lpx/10).toFixed(1)} mm</span><br>
+  ${Math.abs(t)<1?'no tilt: one scale fits the whole photo':'same screw, two different answers: no single px/mm is right for the whole photo'}`;
+}
+if(window.ResizeObserver)new ResizeObserver(draw).observe(document.body);
+draw();S.postHeight();
+</script>
+</body></html>

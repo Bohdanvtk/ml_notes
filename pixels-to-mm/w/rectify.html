@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rectify the whole photo</title>
+<link rel="stylesheet" href="widget.css">
+<script src="scene.js"></script>
+</head>
+<body>
+<div class="two">
+<div><p class="lb"><span class="tag in">photo</span>as taken, with the 4 detected corners</p><canvas id="photo" aria-label="The photo as taken"></canvas></div>
+<div><p class="lb"><span class="tag out">top view</span>warped with H · grid every 10 mm · 10 px = 1 mm</p><canvas id="top" aria-label="The rectified top view"></canvas></div>
+</div>
+<div class="bar">
+<label>distance <input id="d" type="range" min="260" max="450" value="300"></label>
+<label>tilt <input id="t" type="range" min="-35" max="35" value="-22"></label>
+<label>roll <input id="r" type="range" min="-25" max="25" value="8"></label>
+<label>lens k₁ <input id="k" type="range" min="-0.1" max="0.1" step="0.005" value="0"><output id="kv"></output></label>
+<label><input type="checkbox" id="noid"> markers without ids (order guessed)</label>
+</div>
+<table id="tb"></table>
+<div class="status" id="st"></div>
+<script>
+const S=Scene,$=id=>document.getElementById(id),DS=6,PPM=2;   // offscreen photo at 1/6 size, top view drawn at 2 px per mm
+['d','t','r','k','noid'].forEach(id=>$(id).addEventListener('input',()=>{clearTimeout(window._t);window._t=setTimeout(draw,30)}));
+function draw(){
+  const k1=+$('k').value,noid=$('noid').checked,cam=S.camera({d:+$('d').value,tilt:+$('t').value,roll:+$('r').value,k1});$('kv').textContent=k1.toFixed(3);
+  const P=S.pairs(cam,false);
+  // without ids the program cannot tell which marker is which: here it takes them in the wrong cyclic order
+  const order=noid?[1,3,0,2]:[0,1,2,3],H=S.homography(P.map(p=>p.px),order.map(i=>P[i].mm)),Hi=S.inv3(H);
+  // raster photo
+  const ow=S.PHOTO.W/DS,oh=S.PHOTO.H/DS,off=document.createElement('canvas');off.width=ow;off.height=oh;
+  const oc=off.getContext('2d');S.drawPhoto(oc,cam,1/DS);const src=oc.getImageData(0,0,ow,oh).data;
+  let [c,W]=S.prep($('photo'),S.PHOTO.H/S.PHOTO.W);const sc=W/S.PHOTO.W;c.drawImage(off,0,0,W,W*S.PHOTO.H/S.PHOTO.W);
+  P.forEach((p,i)=>S.dot(c,p.px[0]*sc,p.px[1]*sc,5,S.ID_COLORS[order[i]],noid?`→ ${order[i]}?`:`${p.id}`));
+  // warp: every output pixel (X, Y) mm asks H⁻¹ where it came from in the photo
+  const tw=210*PPM,th=297*PPM,img=new ImageData(tw,th),D=img.data;
+  for(let j=0;j<th;j++)for(let i=0;i<tw;i++){const X=(i+0.5)/PPM,Y=(j+0.5)/PPM,w=Hi[2][0]*X+Hi[2][1]*Y+Hi[2][2];
+    const u=(Hi[0][0]*X+Hi[0][1]*Y+Hi[0][2])/w/DS,v=(Hi[1][0]*X+Hi[1][1]*Y+Hi[1][2])/w/DS,o=4*(j*tw+i);
+    if(u<0||v<0||u>=ow-1||v>=oh-1||w<=0){D[o]=D[o+1]=D[o+2]=60;D[o+3]=255;continue}
+    const iu=Math.floor(u),iv=Math.floor(v),a=u-iu,b=v-iv;
+    for(let ch=0;ch<3;ch++){const q=(y,x)=>src[4*(y*ow+x)+ch];D[o+ch]=(1-a)*(1-b)*q(iv,iu)+a*(1-b)*q(iv,iu+1)+(1-a)*b*q(iv+1,iu)+a*b*q(iv+1,iu+1)}D[o+3]=255}
+  const toff=document.createElement('canvas');toff.width=tw;toff.height=th;toff.getContext('2d').putImageData(img,0,0);
+  let [t,TW,TH]=S.prep($('top'),297/210);const k=TW/210;t.drawImage(toff,0,0,TW,TH);
+  t.strokeStyle='rgba(29,158,117,.35)';t.lineWidth=1;for(let x=0;x<=210;x+=10){t.beginPath();t.moveTo(x*k,0);t.lineTo(x*k,TH);t.stroke()}for(let y=0;y<=297;y+=10){t.beginPath();t.moveTo(0,y*k);t.lineTo(TW,y*k);t.stroke()}
+  // measurements
+  const rows=S.SCREWS.map(s=>{const pe=S.screwEnds(s).map(q=>cam.project(q)),m=pe.map(q=>S.applyH(H,q)),Lpx=Math.hypot(pe[1][0]-pe[0][0],pe[1][1]-pe[0][1]);
+    t.strokeStyle=S.css('--r');t.lineWidth=2;t.beginPath();t.moveTo(m[0].X*k,m[0].Y*k);t.lineTo(m[1].X*k,m[1].Y*k);t.stroke();
+    return{s,naive:Lpx/10,withH:Math.hypot(m[1].X-m[0].X,m[1].Y-m[0].Y)}});
+  const e=(v,L,tol)=>`<span class="${Math.abs(v-L)<=tol?'ok':'bad'}">${v.toFixed(2)} mm</span> <span style="color:var(--muted)">(${Math.abs(v-L)<0.005?'±0.00':(v-L>0?'+':'')+(v-L).toFixed(2)})</span>`;
+  $('tb').innerHTML='<tr><th style="text-align:left">screw</th><th>true</th><th>without the sheet: px ÷ 10</th><th>with the sheet: H → top view</th></tr>'+
+    rows.map(r=>`<tr><td style="text-align:left;font-family:inherit">${r.s.name}</td><td>${r.s.L} mm</td><td>${e(r.naive,r.s.L,0.2)}</td><td>${e(r.withH,r.s.L,0.2)}</td></tr>`).join('');
+  const worst=Math.max(...rows.map(r=>Math.abs(r.withH-r.s.L)));
+  $('st').className='status '+(worst<=0.2?'ok':'bad');
+  $('st').innerHTML=noid?`<b>Wrong pairs</b>: marker 0's corner was matched with marker 1's mm, and so on. H still exists, but it maps the photo onto a turned, stretched sheet: every number is wrong. The ids inside the markers prevent exactly this.`
+   :k1===0?`Distance and tilt are gone: both M3×20 now read 20.00 mm, wherever they lie and however you hold the phone.`
+   :`Distance and tilt are handled, but the lens bend is not (a homography keeps lines straight): ${worst.toFixed(2)} mm left. That is the job of K and the distortion coefficients.`;
+}
+if(window.ResizeObserver)new ResizeObserver(()=>{clearTimeout(window._t);window._t=setTimeout(draw,50)}).observe(document.body);
+draw();S.postHeight();
+</script>
+</body></html>

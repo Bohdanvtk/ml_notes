@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Obstacle 3: lens</title>
+<link rel="stylesheet" href="widget.css">
+<script src="scene.js"></script>
+</head>
+<body>
+<div class="two">
+<div><p class="lb"><b>the photo</b> · <span style="color:var(--win)">dashed green</span> = where straight lines would be without the lens</p><canvas id="photo" aria-label="Photo with lens distortion"></canvas></div>
+<div><p class="lb"><b>zoom</b> · middle of the right edge of the sheet</p><canvas id="zoom" aria-label="Magnified sheet edge"></canvas><div class="status" id="st"></div></div>
+</div>
+<div class="bar"><label>lens k₁ <input id="k" type="range" min="-0.15" max="0.15" step="0.005" value="-0.06"><output id="kv"></output></label>
+<button data-k="0">perfect lens</button><button data-k="-0.01">typical phone after its own correction</button><button data-k="-0.1">wide-angle, uncorrected</button></div>
+<script>
+const S=Scene,$=id=>document.getElementById(id);
+document.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{$('k').value=b.dataset.k;draw()});
+$('k').addEventListener('input',draw);
+function straight(c,cam,sc){const ok=S.css('--win');c.strokeStyle=ok;c.lineWidth=1.5;c.setLineDash([6,5]);
+  const flat={...cam,k1:0};[[[0,0],[210,0],[210,297],[0,297]],[[10,60.5],[200,60.5],[200,238],[10,238]]].forEach(r=>{S.path(c,flat,r,sc);c.stroke()});c.setLineDash([])}
+function draw(){
+  const k1=+$('k').value,cam=S.camera({d:300,k1}),flat=S.camera({d:300});$('kv').textContent=k1.toFixed(3);
+  document.querySelectorAll('[data-k]').forEach(b=>b.classList.toggle('on',+b.dataset.k===k1));
+  let [c,W,H]=S.prep($('photo'),S.PHOTO.H/S.PHOTO.W);const sc=W/S.PHOTO.W;S.drawPhoto(c,cam,sc);straight(c,cam,sc);
+  // zoom around the middle of the right sheet edge
+  const mid=cam.project([210,148.5]),ideal=flat.project([210,148.5]),cor=cam.project([210,297]),icor=flat.project([210,297]);
+  const chordX=(cam.project([210,0])[0]+cor[0])/2,bow=mid[0]-chordX,shift=Math.hypot(cor[0]-icor[0],cor[1]-icor[1]);
+  let [z,ZW,ZH]=S.prep($('zoom'),0.8);const zs=ZW/400,zx=ideal[0]-200,zy=ideal[1]-160;
+  z.save();z.translate(-zx*zs,-zy*zs);S.drawPhoto(z,cam,zs);straight(z,cam,zs);z.restore();
+  z.strokeStyle=S.css('--r');z.lineWidth=2;z.beginPath();z.moveTo((ideal[0]-zx)*zs,(ideal[1]-zy)*zs);z.lineTo((mid[0]-zx)*zs,(mid[1]-zy)*zs);z.stroke();
+  const mmpx=10;
+  $('st').className='status '+(Math.abs(bow)<1?'ok':'bad');
+  $('st').innerHTML=`the right edge bows by <span class="big">${Math.abs(bow).toFixed(0)} px</span> ≈ ${(Math.abs(bow)/mmpx).toFixed(1)} mm in the middle<br>
+  the sheet corner moved <span class="big">${shift.toFixed(0)} px</span> ≈ ${(shift/mmpx).toFixed(1)} mm<br>
+  ${k1<0?'k₁ &lt; 0: barrel, lines bulge outwards':k1>0?'k₁ &gt; 0: pincushion, lines bend inwards':'k₁ = 0: straight lines stay straight'}.<br>
+  A homography maps straight lines to straight lines, so it <b>cannot</b> undo this bend. That needs K and the distortion from calibration.`;
+}
+if(window.ResizeObserver)new ResizeObserver(draw).observe(document.body);
+draw();S.postHeight();
+</script>
+</body></html>
