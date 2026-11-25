@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blur, Otsu, close</title>
+<link rel="stylesheet" href="widget.css">
+<script src="measure.js"></script>
+<style>.grid3{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:12px;margin-top:10px}
+@media (max-width:640px){.grid3{grid-template-columns:minmax(0,1fr)}}
+.zoom td{width:auto;padding:0;text-align:center;font-size:10.5px;border:1px solid var(--rule);height:22px}
+.zoom{table-layout:fixed}</style>
+</head>
+<body>
+<div class="bar" style="margin-top:0" id="steps"></div>
+<canvas id="cv" style="margin-top:10px" aria-label="Top view of the screw at the selected step"></canvas>
+<div class="grid3">
+<div><p class="lb" id="zl"></p><table class="zoom" id="zoom"></table></div>
+<div><p class="lb">histogram of brightness · Otsu picks T in the valley</p><canvas id="hist" aria-label="Brightness histogram with the Otsu threshold"></canvas>
+<p class="lb" style="margin-top:8px" id="kl"></p><canvas id="kern" style="max-width:150px" aria-label="Elliptic kernel"></canvas></div>
+</div>
+<div class="bar">
+<label>glare width <input id="g" type="range" min="0" max="1.2" step="0.05" value="0.4"><output id="gv"></output></label>
+<label>close kernel <select id="ks"><option value="1">off</option><option>3</option><option>5</option><option selected>7</option><option>9</option><option>11</option></select></label>
+</div>
+<div class="status" id="st"></div>
+<script>
+const M=Measure,$=id=>document.getElementById(id);
+const STEPS=['1 · top view','2 · GaussianBlur 5×5','3 · Otsu + BINARY_INV','4 · MORPH_CLOSE'];
+let step=3,R,B,O,m0,m1;const scr={type:'M3',L:20,x:7,y:9,ang:25};
+$('steps').innerHTML=STEPS.map((s,i)=>`<button data-i="${i}">${s}</button>`).join('');
+document.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>{step=+b.dataset.i;draw()});
+$('g').addEventListener('input',()=>{clearTimeout(window._t);window._t=setTimeout(run,40)});$('ks').addEventListener('input',run);
+function run(){R=M.render({W:34,H:18,screws:[scr],glare:+$('g').value,seed:3});B=M.blur5(R.img,R.W,R.H);O=M.otsu(B.out);m0=M.thresholdInv(B.out,O.T);m1=M.close(m0,R.W,R.H,+$('ks').value);draw()}
+// zoom window: 12 × 9 pixels across the glare stripe in the middle of the shaft
+const ZX=Math.round((7+12*Math.cos(25*Math.PI/180)-0.6)*10)-6,ZY=Math.round((9+12*Math.sin(25*Math.PI/180))*10)-4,ZW=12,ZH=9;
+function draw(){
+  document.querySelectorAll('[data-i]').forEach(b=>b.classList.toggle('on',+b.dataset.i===step));
+  const ks=+$('ks').value,g=+$('g').value;$('gv').textContent=g.toFixed(2)+' mm';
+  const src=step===0?R.img:step===1?B.out:null,mask=step===2?m0:step===3?m1:null;
+  const cnv=mask?M.grayCanvas(null,R.W,R.H,i=>mask[i]?255:0):M.grayCanvas(src,R.W,R.H);
+  const cv=$('cv'),dpr=devicePixelRatio||1,w=cv.clientWidth,h=w*R.H/R.W;cv.width=w*dpr;cv.height=h*dpr;cv.style.height=h+'px';
+  const c=cv.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.imageSmoothingEnabled=false;c.drawImage(cnv,0,0,w,h);const s=w/R.W;
+  c.strokeStyle='#E8692E';c.lineWidth=2;c.strokeRect(ZX*s,ZY*s,ZW*s,ZH*s);
+  c.fillStyle=mask?'#9AA4B2':'#5B6573';c.font='12px system-ui,sans-serif';c.fillText('1 mm = 10 px',8,h-8);c.fillRect(90,h-12,10*s,3);
+  // zoom table with the exact numbers
+  const val=(i)=>step===0?Math.round(R.img[i]):step===1?Math.round(B.out[i]):(mask[i]?255:0);
+  $('zl').innerHTML=`<b style="color:var(--r)">orange box</b>, pixel by pixel: ${step<2?'brightness 0–255':'mask: 255 = screw, 0 = paper'}`;
+  let html='';for(let y=ZY;y<ZY+ZH;y++){html+='<tr>';for(let x=ZX;x<ZX+ZW;x++){const v=val(y*R.W+x),bg=step<2?`rgb(${v},${v},${v})`:v?'#fff':'#000',fg=(step<2?v<140:v===0)?'#fff':'#000';
+    html+=`<td style="background:${bg};color:${fg}">${v}</td>`}html+='</tr>'}$('zoom').innerHTML=html;
+  // histogram
+  const hc=$('hist'),hw=hc.clientWidth,hh=hw*0.55;hc.width=hw*dpr;hc.height=hh*dpr;hc.style.height=hh+'px';const q=hc.getContext('2d');q.setTransform(dpr,0,0,dpr,0,0);
+  const H=O.hist,mx=Math.sqrt(Math.max(...H)),X=v=>10+v/255*(hw-20),Y=n=>hh-22-Math.sqrt(n)/mx*(hh-40);
+  for(let v=0;v<256;v++){q.fillStyle=v<=O.T?'#5B6573':'#c9ced6';q.fillRect(X(v),Y(H[v]),Math.max(1,(hw-20)/256),hh-22-Y(H[v]))}
+  const sm=Math.max(...O.score);q.strokeStyle='#1D9E75';q.lineWidth=1.5;q.beginPath();O.score.forEach((v,i)=>{const y=hh-22-v/sm*(hh-40);i?q.lineTo(X(i),y):q.moveTo(X(i),y)});q.stroke();
+  q.strokeStyle='#E8692E';q.lineWidth=2;q.beginPath();q.moveTo(X(O.T),8);q.lineTo(X(O.T),hh-22);q.stroke();
+  q.font='12px system-ui,sans-serif';q.fillStyle='#E8692E';q.fillText(`T = ${O.T}`,X(O.T)+4,18);
+  q.fillStyle='#5B6573';q.textAlign='center';q.fillText(`screw ≈ ${O.meanDark.toFixed(0)}`,X(O.meanDark),Y(H[Math.round(O.meanDark)])-30);q.textAlign='right';q.fillText(`paper ≈ ${O.meanLight.toFixed(0)}`,X(O.meanLight)-8,34);q.textAlign='left';
+  q.fillStyle='#1D9E75';q.fillText('Otsu score (max at T)',X(4),24);q.fillStyle='#9AA4B2';q.fillText('height = √count',X(4),hh-26);
+  q.fillStyle='#9AA4B2';[0,128,255].forEach(v=>q.fillText(v,X(v)-6,hh-6));
+  // kernel
+  const K=M.disk(Math.max(ks,1)),kc=$('kern'),kw=kc.clientWidth;kc.width=kw*dpr;kc.height=kw*dpr;kc.style.height=kw+'px';const k=kc.getContext('2d');k.setTransform(dpr,0,0,dpr,0,0);
+  const n=Math.max(ks,1),cs=kw/n,set=new Set(K.map(p=>p.join(',')));
+  for(let y=0;y<n;y++)for(let x=0;x<n;x++){k.fillStyle=set.has(`${x-(n-1)/2},${y-(n-1)/2}`)?'#2F6FDE':'transparent';k.fillRect(x*cs+1,y*cs+1,cs-2,cs-2);k.strokeStyle='rgba(128,128,128,.4)';k.strokeRect(x*cs+0.5,y*cs+0.5,cs-1,cs-1)}
+  $('kl').innerHTML=ks>1?`close kernel: ellipse ${ks}×${ks} px ≈ ${(ks/10).toFixed(1)} mm`:'close: off';
+  const pieces=a=>M.blobs(a,R.W,R.H).blobs.filter(b=>b.area>=200).length,p0=pieces(m0),p1=pieces(m1);
+  const msg=[`the rectified top view, 10 px = 1 mm. Sensor noise ±5 and paper texture; steel ≈ 75–93, the shiny stripe ≈ 215.`,
+    `every pixel → weighted mean of its 5×5 neighbours (σ = ${B.sigma.toFixed(2)}, weights ${B.kernel.map(v=>v.toFixed(2)).join(' ')} per axis). Noise shrinks, edges soften by 1–2 px = 0.1–0.2 mm.`,
+    `Otsu tried every T and kept <b>T = ${O.T}</b> (best split). Pixel ≤ ${O.T} → 255 (screw), else 0. The stripe (≈ 215) is above T, so it became “paper”: the screw is in <b>${p0}</b> piece${p0>1?'s':''}.`,
+    ks>1?`dilate by ${(ks-1)/2} px, then erode by ${(ks-1)/2} px: gaps narrower than ≈ ${(ks/10).toFixed(1)} mm close, the outline goes back. Screw in <b>${p1}</b> piece${p1>1?'s':''}${p1===1?' ✓':' ✗ the stripe is wider than the kernel'}.`:'no closing: the mask stays as Otsu left it.'][step];
+  $('st').className='status '+(step<3?'':p1===1?'ok':'bad');$('st').innerHTML=msg;
+}
+if(window.ResizeObserver)new ResizeObserver(()=>R&&draw()).observe(document.body);
+run();
+(function(){const post=()=>parent.postMessage({cvNotesHeight:Math.ceil(document.body.getBoundingClientRect().height)+8},'*');addEventListener('load',post);if(window.ResizeObserver)new ResizeObserver(post).observe(document.body);setTimeout(post,300)})();
+</script>
+</body></html>

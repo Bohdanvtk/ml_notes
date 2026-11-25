@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contours and the area filter</title>
+<link rel="stylesheet" href="widget.css">
+<script src="measure.js"></script>
+</head>
+<body>
+<div class="two">
+<div><p class="lb"><b>top view</b> · 3 screws, dust, print dots</p><canvas id="img" aria-label="Top view with screws and dust"></canvas></div>
+<div><p class="lb"><b>mask after close</b> · one colour per contour, grey = thrown away</p><canvas id="msk" aria-label="Mask with coloured contours"></canvas></div>
+</div>
+<div class="bar">
+<label>min area <input id="a" type="range" min="20" max="1000" step="10" value="200"><output id="av"></output></label>
+<label><input type="checkbox" id="touch"> two screws touch</label>
+</div>
+<table id="tb"></table>
+<div class="status" id="st"></div>
+<script>
+const M=Measure,$=id=>document.getElementById(id),COL=['#2F6FDE','#E8692E','#1D9E75','#B04FC4','#C9A227'];
+let R,mask,blobs;
+function run(){const t=$('touch').checked;
+  const screws=[{type:'M3',L:20,x:5,y:8,ang:12},{type:'M4',L:16,x:t?22.6:31,y:t?11.3:7,ang:t?-30:-20},{type:'M3',L:10,x:12,y:27,ang:-5}];
+  R=M.render({W:48,H:36,screws,glare:0.4,dust:40,seed:9});const b=M.blur5(R.img,R.W,R.H).out,T=M.otsu(b).T;mask=M.close(M.thresholdInv(b,T),R.W,R.H,7);
+  blobs=M.blobs(mask,R.W,R.H).blobs.sort((x,y)=>y.area-x.area);draw()}
+function draw(){
+  const amin=+$('a').value;$('av').textContent=`${amin} px² = ${(amin/100).toFixed(1)} mm²`;
+  const dpr=devicePixelRatio||1,put=(cv,src)=>{const w=cv.clientWidth,h=w*R.H/R.W;cv.width=w*dpr;cv.height=h*dpr;cv.style.height=h+'px';const c=cv.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.imageSmoothingEnabled=false;c.drawImage(src,0,0,w,h);return[c,w/R.W]};
+  put($('img'),M.grayCanvas(R.img,R.W,R.H));
+  const owner=new Int32Array(R.W*R.H).fill(-1);blobs.forEach((b,k)=>b.pts.forEach(([x,y])=>owner[y*R.W+x]=k));
+  let kept=0;const colOf=blobs.map(b=>b.area>=amin?COL[kept++%COL.length]:null);
+  const rgb=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
+  const cnv=M.grayCanvas(null,R.W,R.H,i=>{const k=owner[i];if(k<0)return 0;const x=i%R.W,y=(i-x)/R.W;
+    const edge=x===0||y===0||x===R.W-1||y===R.H-1||owner[i-1]!==k||owner[i+1]!==k||owner[i-R.W]!==k||owner[i+R.W]!==k;
+    return colOf[k]?(edge?rgb(colOf[k]):[235,235,235]):(edge?[120,120,120]:[70,70,70])});
+  const [c,s]=put($('msk'),cnv);
+  c.font='600 12px system-ui,sans-serif';blobs.forEach((b,k)=>{if(!colOf[k])return;c.lineWidth=3;c.strokeStyle='#000';const t=`#${k+1}`;c.strokeText(t,b.cx*s+8,b.cy*s);c.fillStyle=colOf[k];c.fillText(t,b.cx*s+8,b.cy*s)});
+  const shown=blobs.filter((b,k)=>colOf[k]||k<blobs.length).slice(0,12);
+  $('tb').innerHTML='<tr><th style="text-align:left">contour</th><th>area, px²</th><th>area, mm²</th><th>kept?</th></tr>'+
+    blobs.map((b,k)=>[b,k]).filter(([b,k])=>colOf[k]||k<8).map(([b,k])=>`<tr><td style="text-align:left;color:${colOf[k]||'var(--muted)'}">${colOf[k]?'#'+(k+1):'speck'}</td><td>${b.area}</td><td>${(b.area/100).toFixed(1)}</td><td>${colOf[k]?'<span class="ok">✓ object</span>':`<span class="bad">✗ &lt; ${amin}</span>`}</td></tr>`).join('')+
+    (blobs.length>8+kept?`<tr><td style="text-align:left;color:var(--muted)">… ${blobs.length-8-Math.max(0,kept-8)} more specks</td><td></td><td></td><td></td></tr>`:'');
+  const dropped=blobs.length-kept;
+  $('st').className='status '+(kept===3?'ok':'bad');
+  $('st').innerHTML=`findContours found <b>${blobs.length}</b> white blobs → kept <b>${kept}</b>, dropped ${dropped}. The smallest screw (M3×10) covers ≈ 30 mm² = 3000 px², a dust speck a few px²: 200 px² sits safely in between.`+
+    ($('touch').checked?`<br><b>Touching screws</b>: one contour around two screws → it will be measured as one object and labelled “?”.`:'')+
+    (kept>3&&!$('touch').checked?'<br>Threshold too low: dust counts as objects.':'')+(kept<3&&!$('touch').checked?'<br>Threshold too high: a real screw was thrown away.':'');
+}
+$('a').addEventListener('input',draw);$('touch').addEventListener('input',run);
+if(window.ResizeObserver)new ResizeObserver(()=>R&&draw()).observe(document.body);
+run();
+(function(){const post=()=>parent.postMessage({cvNotesHeight:Math.ceil(document.body.getBoundingClientRect().height)+8},'*');addEventListener('load',post);if(window.ResizeObserver)new ResizeObserver(post).observe(document.body);setTimeout(post,300)})();
+</script>
+</body></html>
