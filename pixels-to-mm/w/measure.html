@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Measuring one screw</title>
+<link rel="stylesheet" href="widget.css">
+<script src="measure.js"></script>
+<style>.steps{display:grid;gap:8px;margin-top:10px}.st2{border:1px solid var(--rule);border-radius:10px;padding:8px 12px;font-size:14.5px}
+.st2 b.n{display:inline-block;min-width:24px;color:var(--muted)}.big2{font-family:var(--font-mono);font-weight:700;font-size:17px}
+.label{font-family:var(--font-mono);font-size:30px;font-weight:700}</style>
+</head>
+<body>
+<div class="bar" style="margin-top:0">
+<label>screw <select id="type"><option value="M3,20">M3×20</option><option value="M4,16">M4×16</option><option value="M5,25">M5×25</option><option value="M3,10">M3×10</option></select></label>
+<label>angle <input id="ang" type="range" min="-80" max="80" value="25"><output id="angv"></output></label>
+<label><input type="checkbox" id="flip"> head on the right</label>
+<label><input type="checkbox" id="shadow"> shadow</label>
+<label><input type="checkbox" id="glare"> glare 1.0 mm (wider than the kernel)</label>
+</div>
+<div class="two" style="margin-top:10px">
+<div><p class="lb"><b>3a</b> · mask + minAreaRect (smallest box, may be tilted)</p><canvas id="rect" aria-label="Mask with the minimum area rectangle"></canvas></div>
+<div><p class="lb"><b>3a</b> · rotated by the box angle: the screw lies along x</p><canvas id="rot" aria-label="Rotated mask"></canvas></div>
+</div>
+<p class="lb" style="margin-top:12px"><b>3b</b> · thickness profile: white pixels in every column (hover a column)</p>
+<canvas id="prof" aria-label="Thickness profile, one bar per column"></canvas>
+<div class="steps" id="steps"></div>
+<script>
+const M=Measure,$=id=>document.getElementById(id);let R,mask,blob,rect,rot,A,hover=-1;
+['type','ang','flip','shadow','glare'].forEach(id=>$(id).addEventListener('input',()=>{clearTimeout(window._t);window._t=setTimeout(run,40)}));
+function run(){
+  const [ty,L]=$('type').value.split(','),ang=+$('ang').value+($('flip').checked?180:0);$('angv').textContent=$('ang').value+'°';
+  const a=ang*Math.PI/180,W=Math.max(+L+8,24),H=Math.max(14,Math.abs(Math.sin(a))*L+10);
+  const scr={type:ty,L:+L,x:W/2-L/2*Math.cos(a),y:H/2-L/2*Math.sin(a),ang};
+  R=M.render({W,H,screws:[scr],glare:$('glare').checked?1.0:0.4,shadow:$('shadow').checked,seed:3});
+  const b=M.blur5(R.img,R.W,R.H).out,T=M.otsu(b).T;mask=M.close(M.thresholdInv(b,T),R.W,R.H,7);
+  const bl=M.blobs(mask,R.W,R.H).blobs.filter(x=>x.area>=200).sort((x,y)=>y.area-x.area);blob=bl[0];window._pieces=bl.length;
+  rect=M.minAreaRect(blob.pts);rot=M.rotateBlob(blob.pts,rect.angle);A=M.analyze(M.profile(rot));draw()}
+function canvasFit(cv,aspect){const dpr=devicePixelRatio||1,w=cv.clientWidth,h=w*aspect;cv.width=w*dpr;cv.height=h*dpr;cv.style.height=h+'px';const c=cv.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.imageSmoothingEnabled=false;return[c,w,h]}
+function draw(){
+  const col={head:'#E8692E',shaft:'#2F6FDE',tip:'#9AA4B2',ok:'#1D9E75',bad:'#C0392B',p:'#B04FC4'};
+  // 3a: mask + box
+  let [c,w,h]=canvasFit($('rect'),R.H/R.W);const s=w/R.W;
+  c.drawImage(M.grayCanvas(null,R.W,R.H,i=>mask[i]?255:0),0,0,w,h);
+  c.strokeStyle=col.ok;c.lineWidth=2;c.beginPath();rect.box.forEach((p,i)=>i?c.lineTo(p[0]*s,p[1]*s):c.moveTo(p[0]*s,p[1]*s));c.closePath();c.stroke();
+  const ctr=rect.box.reduce((a,p)=>[a[0]+p[0]/4,a[1]+p[1]/4],[0,0]),ar=rect.angle*Math.PI/180,len=rect.length/2;
+  c.strokeStyle=col.head;c.setLineDash([5,4]);c.beginPath();c.moveTo((ctr[0]-Math.cos(ar)*len)*s,(ctr[1]-Math.sin(ar)*len)*s);c.lineTo((ctr[0]+Math.cos(ar)*len)*s,(ctr[1]+Math.sin(ar)*len)*s);c.stroke();c.setLineDash([]);
+  c.font='600 12px system-ui,sans-serif';c.fillStyle=col.ok;c.fillText(`${rect.length.toFixed(0)} × ${rect.width.toFixed(0)} px, angle ${rect.angle.toFixed(1)}°`,6,14);
+  // 3a: rotated mask
+  [c,w,h]=canvasFit($('rot'),R.H/R.W);const rs=Math.min(w/(rot.W+4),h/(rot.H+4)),ox=(w-rot.W*rs)/2,oy=(h-rot.H*rs)/2;c.fillStyle='#000';c.fillRect(0,0,w,h);
+  c.drawImage(M.grayCanvas(null,rot.W,rot.H,i=>rot.m[i]?255:0),ox,oy,rot.W*rs,rot.H*rs);
+  c.fillStyle='#9AA4B2';c.fillText('x → along the screw',8,h-8);
+  // 3b/3c: profile
+  const P=A.prof,n=P.length;[c,w,h]=canvasFit($('prof'),0.42);const pl=40,pr=10,pt=14,pb=34,bw=(w-pl-pr)/n,ymax=Math.max(...P,1)*1.12,Y=v=>h-pb-v/ymax*(h-pt-pb),X=i=>pl+i*bw;
+  c.fillStyle='rgba(232,105,46,.08)';c.fillRect(X(0),pt,A.k*bw,h-pt-pb);c.fillRect(X(n-A.k),pt,A.k*bw,h-pt-pb);
+  c.fillStyle='rgba(47,111,222,.07)';c.fillRect(X(Math.round(0.4*n)),pt,(Math.round(0.9*n)-Math.round(0.4*n))*bw,h-pt-pb);
+  P.forEach((v,i)=>{c.fillStyle=i<A.headEnd?col.head:i>=A.tipStart?col.tip:col.shaft;c.fillRect(X(i),Y(v),Math.max(bw-0.3,0.6),h-pb-Y(v))});
+  const hl=(v,cl,lab,dash,right)=>{c.strokeStyle=cl;c.lineWidth=1.5;c.setLineDash(dash?[5,4]:[]);c.beginPath();c.moveTo(pl,Y(v));c.lineTo(w-pr,Y(v));c.stroke();c.setLineDash([]);
+    c.font='11.5px system-ui,sans-serif';c.fillStyle=cl;c.fillText(lab,right?w-pr-c.measureText(lab).width-2:pl+4,Y(v)-3)};
+  hl(A.lim,col.bad,`1.25 × median = ${A.lim.toFixed(1)} px (head limit)`,true,true);hl(A.p95,col.ok,`P95 = ${A.p95.toFixed(1)} px`,false,true);
+  c.strokeStyle=col.p;c.lineWidth=1.5;c.setLineDash([2,3]);c.beginPath();c.moveTo(pl,Y(A.avg));c.lineTo(w-pr,Y(A.avg));c.stroke();c.setLineDash([]);c.fillStyle=col.p;c.font='11.5px system-ui,sans-serif';c.fillText(`mean = ${A.avg.toFixed(1)}`,X(Math.round(0.42*n)),Y(A.avg)+13);
+  c.fillStyle='#5B6573';c.font='11px system-ui,sans-serif';
+  for(let v=0;v<=ymax;v+=10){c.fillText(v,6,Y(v)+4)}c.fillText('px',6,pt);
+  for(let mm=0;mm<=n/10;mm+=5){c.fillText(mm+' mm',X(mm*10)-8,h-pb+14)}
+  const hv=A.flipped?A.last:A.first,tv=A.flipped?A.first:A.last;c.fillStyle=col.head;c.fillText(`head-end 1/6: avg ${hv.toFixed(1)}`,X(0)+2,h-8);c.fillStyle=col.tip;c.fillText(`tip-end 1/6: avg ${tv.toFixed(1)}`,X(n-A.k)-40,h-8);
+  c.fillStyle=col.shaft;c.fillText('40–90 %: median',X(Math.round(0.4*n))+4,pt+12);
+  if(hover>=0&&hover<n){c.strokeStyle='#18202B';c.lineWidth=1;c.strokeRect(X(hover),Y(P[hover]),bw,h-pb-Y(P[hover]));
+    const t=`column ${hover}: ${P[hover]} px = ${(P[hover]/10).toFixed(1)} mm`;c.font='600 12px system-ui,sans-serif';c.fillStyle='#18202B';c.fillText(t,Math.min(X(hover)+6,w-c.measureText(t).width-4),Y(P[hover])-6)}
+  // steps with the exact numbers
+  const sd=A.sd,sl=A.sl,pieces=window._pieces;
+  $('steps').innerHTML=`
+  <div class="st2"><b class="n">3a</b>minAreaRect: long side at <span class="big2">${rect.angle.toFixed(1)}°</span> → rotate by ${(-rect.angle).toFixed(1)}° so the screw lies along x.${pieces>1?` <span class="bad">The mask has ${pieces} pieces: only the biggest one is measured here.</span>`:''}</div>
+  <div class="st2"><b class="n">3c</b>head side: first 1/6 (${A.k} columns) average <span class="big2">${A.first.toFixed(1)} px</span>, last 1/6 <span class="big2">${A.last.toFixed(1)} px</span> → head on the ${A.flipped?'<b>right</b>, profile reversed':'<b>left</b>'}.<br>
+  typical shaft = median of 40–90 % = <span class="big2">${A.med} px</span>; head = columns thicker than 1.25 × ${A.med} = ${A.lim.toFixed(1)} px → head ends at column <span class="big2">${A.headEnd}</span> (${(A.headEnd/10).toFixed(1)} mm).</div>
+  <div class="st2"><b class="n">3d</b>L = ${n} columns ÷ 10 = <span class="big2">${A.L.toFixed(1)} mm</span> (countersunk: the head counts).<br>
+  Ø from the shaft (columns ${A.headEnd}–${A.tipStart}, tip 5 % dropped): &nbsp;<span style="color:#1D9E75">P95 = ${A.p95.toFixed(1)} px → <span class="big2">${A.D.toFixed(2)} mm</span> ✓ thread crests</span> · <span style="color:#B04FC4">mean ${A.avg.toFixed(1)} px → ${(A.avg/10).toFixed(2)} mm (too low: crests and roots mixed)</span> · <span style="color:#5B6573">max ${A.mx} px → ${(A.mx/10).toFixed(1)} mm (one stray pixel decides)</span></div>
+  <div class="st2" style="border-color:${A.label==='?'?'#C0392B':'#1D9E75'}"><b class="n">3e</b>nearest standard: Ø ${A.D.toFixed(2)} → ${sd?`<b>${sd}</b> (off ${Math.abs(A.D-sd).toFixed(2)} ≤ 0.4)`:'<b class="bad">none within 0.4</b>'}, L ${A.L.toFixed(1)} → ${sl?`<b>${sl}</b> (off ${Math.abs(A.L-sl).toFixed(1)} ≤ 1)`:'<b class="bad">none within 1</b>'} &nbsp;⇒&nbsp; <span class="label" style="color:${A.label==='?'?'#C0392B':'#1D9E75'}">${A.label}</span>
+  ${A.label==='?'?' <span class="bad">suspicious measurement: better an honest “?” than a wrong size</span>':''}</div>`;
+}
+$('prof').addEventListener('pointermove',e=>{const r=$('prof').getBoundingClientRect(),x=e.clientX-r.left,n=A.prof.length,bw=(r.width-50)/n;hover=Math.floor((x-40)/bw);draw()});
+$('prof').addEventListener('pointerleave',()=>{hover=-1;draw()});
+if(window.ResizeObserver)new ResizeObserver(()=>A&&draw()).observe(document.body);
+run();
+(function(){const post=()=>parent.postMessage({cvNotesHeight:Math.ceil(document.body.getBoundingClientRect().height)+8},'*');addEventListener('load',post);if(window.ResizeObserver)new ResizeObserver(post).observe(document.body);setTimeout(post,300)})();
+</script>
+</body></html>

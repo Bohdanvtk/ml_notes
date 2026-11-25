@@ -9,7 +9,7 @@
 <script defer src="../assets/katex/katex.min.js"></script>
 <script defer src="../assets/katex/auto-render.min.js" onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'\\(',right:'\\)',display:false}],throwOnError:false})"></script></head>
 <body><div class="layout">
-<nav aria-label="Sections"><a class="back" href="../">All topics</a><ol><li><a href="#distance">Obstacle 1 · distance</a></li><li><a href="#tilt">Obstacle 2 · tilt</a></li><li><a href="#lens">Obstacle 3 · lens</a></li><li><a href="#map">The map: sheet_layout.json</a></li><li><a href="#solve">From 4 pairs to H</a></li><li><a href="#apply">Using H on one point</a></li><li><a href="#rectify">Rectify the whole photo</a></li><li><a href="#code">In code</a></li></ol></nav>
+<nav aria-label="Sections"><a class="back" href="../">All topics</a><ol><li><a href="#distance">Obstacle 1 · distance</a></li><li><a href="#tilt">Obstacle 2 · tilt</a></li><li><a href="#lens">Obstacle 3 · lens</a></li><li><a href="#map">The map: sheet_layout.json</a></li><li><a href="#solve">From 4 pairs to H</a></li><li><a href="#apply">Using H on one point</a></li><li><a href="#rectify">Rectify the whole photo</a></li><li><a href="#segment">Screw vs paper: blur, Otsu, close</a></li><li><a href="#contours">Contours and the area filter</a></li><li><a href="#measure">Measuring one screw</a></li><li><a href="#breaks">Where it breaks</a></li><li><a href="#code">In code</a></li></ol></nav>
 <main>
 <header class="top"><h1>Pixels to millimetres</h1>
 <p>Goal: a phone photo that works as a ruler. Put screws on a printed sheet, take a photo, get “3 mm thick, 20 mm long”. Measuring in pixels is easy; the hard part is the number of pixels in one millimetre.</p>
@@ -84,8 +84,60 @@ $$(X, Y) \;\xrightarrow{\ \times H^{-1},\ \div w\ }\; (u, v) \text{ on the photo
 <a class="open" href="w/rectify.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
 </section>
 
+<section id="segment">
+<div class="sec-head"><h2><span class="n">8</span>Screw vs paper: blur, Otsu, close</h2><button class="copy" data-id="segment">Copy link</button></div>
+<p class="lead">Now <code>measure.py</code> works on the top view (10 px = 1 mm). First goal: a mask where the screw is white (255) and the paper black (0). Three steps; click through them and watch the numbers in the orange box.</p>
+<div class="formula"><p>Blur: every pixel becomes a weighted mean of its 5×5 neighbours, so lone noisy pixels do not become false islands</p>
+$$I_{\text{blur}}(x, y) = \sum_{i=-2}^{2}\sum_{j=-2}^{2} g_i\, g_j\; I(x + i,\ y + j), \qquad g_i \propto e^{-i^2 / (2\sigma^2)},\ \ \sigma = 1.1$$</div>
+<div class="formula"><p>Otsu: try every threshold T, keep the one that splits the histogram into the two most uniform groups (the valley between the humps)</p>
+$$T^{*} = \arg\max_{T}\; \omega_{\text{dark}}(T)\,\omega_{\text{light}}(T)\,\bigl(\mu_{\text{dark}}(T) - \mu_{\text{light}}(T)\bigr)^2$$
+$$\text{mask}(x, y) = \begin{cases}255 &amp; I_{\text{blur}}(x, y) \le T^{*}\ \ \text{(screw)}\\ 0 &amp; \text{otherwise (paper)}\end{cases}$$
+<p>\(\omega\) = share of pixels in a group, \(\mu\) = its mean brightness. BINARY_INV makes the dark screw white.</p></div>
+<div class="formula"><p>Close = dilate, then erode with the same 7 px ellipse (≈ 0.7 mm)</p>
+$$\text{close}(m) = \operatorname{erode}\bigl(\operatorname{dilate}(m)\bigr)$$
+<p>Dilate: every white blob grows by the kernel radius (3 px), so small black gaps inside it fill in. Erode: everything shrinks back by the same 3 px, so the outer outline returns to its place.</p>
+<p>Why: stainless steel shines. The bright stripe is above T, so Otsu calls it paper and the screw falls apart. Closing glues it back without changing the size.</p></div>
+<div class="frame"><iframe src="w/seg.html" title="Blur, Otsu, close" loading="lazy"></iframe>
+<a class="open" href="w/seg.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
+</section>
+
+<section id="contours">
+<div class="sec-head"><h2><span class="n">9</span>Contours and the area filter</h2><button class="copy" data-id="contours">Copy link</button></div>
+<p class="lead"><code>findContours</code> walks around every white blob, so every screw becomes a separate object. <code>RETR_EXTERNAL</code> keeps only outer outlines. Anything smaller than 200 px² is dust, a print dot or a bit of shadow.</p>
+<div class="formula">$$200\ \text{px}^2 = \frac{200}{10 \cdot 10}\ \text{mm}^2 = 2\ \text{mm}^2 \;\ll\; \underbrace{\approx 30\ \text{mm}^2}_{\text{smallest screw, M3×10}}$$</div>
+<div class="frame"><iframe src="w/contours.html" title="Contours and the area filter" loading="lazy"></iframe>
+<a class="open" href="w/contours.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
+</section>
+
+<section id="measure">
+<div class="sec-head"><h2><span class="n">10</span>Measuring one screw</h2><button class="copy" data-id="measure">Copy link</button></div>
+<p class="lead">Turn the screw horizontal, count white pixels in every column, find where the head ends, then read length and diameter. Everything below is computed live from the mask.</p>
+<div class="formula"><p>3a · rotate by the angle of the long side of minAreaRect · 3b · profile: one number per column</p>
+$$\text{thickness}(x) = \#\{\,y : \text{mask}(x, y) = 255\,\}\ \text{px}, \qquad \frac{\text{px}}{10} = \text{mm}$$</div>
+<div class="formula"><p>3c · head: on the side whose 1/6 is thicker; it ends at the last column thicker than 1.25 × the typical shaft</p>
+$$m = \operatorname{median}\bigl(\text{thickness}[\,0.4n \ldots 0.9n\,]\bigr), \qquad \text{head} = \{\,x : \text{thickness}(x) &gt; 1.25\,m\,\}$$</div>
+<div class="formula"><p>3d · length and diameter · 3e · nearest standard</p>
+$$L = \frac{n}{10}\ \text{mm}, \qquad \varnothing = \frac{P_{95}\bigl(\text{thickness}[\,\text{head end} \ldots 0.95n\,]\bigr)}{10}\ \text{mm}$$
+$$\varnothing \to \{3, 4, 5, 6\}\ \ \text{if within } 0.4\ \text{mm}$$
+$$L \to \{6, 8, 10, 12, 14, 16, 20, 25, 30\}\ \ \text{if within } 1\ \text{mm}, \qquad \text{otherwise “?”}$$
+<p>P95 = “almost the maximum”: the thread crests (the nominal Ø), but not one stray pixel. The mean mixes crests and roots and comes out too small.</p></div>
+<div class="frame"><iframe src="w/measure.html" title="Measuring one screw" loading="lazy"></iframe>
+<a class="open" href="w/measure.html" target="_blank" rel="noopener">Open this visualization on its own page</a></div>
+</section>
+
+<section id="breaks">
+<div class="sec-head"><h2><span class="n">11</span>Where it breaks</h2><button class="copy" data-id="breaks">Copy link</button></div>
+<p class="lead">Each case can be switched on in the widgets above. When it happens, the right answer is “?”, not a wrong size.</p>
+<div class="formula">
+<p><b>Glare wider than 0.7 mm</b> → the gap does not close, the screw falls apart, the profile has a dip. <i>Section 10: “glare 1.0 mm” → Ø ≈ 1.3 mm → “?”.</i></p>
+<p><b>Shadow of the screw</b> → the shadow is dark, Otsu adds it to the screw, Ø grows. <i>Section 10: “shadow” → Ø ≈ 3.4 mm → “?”.</i></p>
+<p><b>Two screws touch</b> → one contour around both, measured as one object → “?”. <i>Section 9: “two screws touch”.</i></p>
+<p><b>Height above the paper</b> → the top of the screw is closer to the camera than the paper the homography was built on, so it looks slightly bigger (parallax). Not simulated here; it grows with the screw diameter and the tilt of the phone.</p>
+<p><b>Debug:</b> after the first photo open <code>debug/&lt;name&gt;_mask.png</code> next to <code>_labeled.jpg</code> to see what the algorithm sees.</p></div>
+</section>
+
 <section id="code">
-<div class="sec-head"><h2><span class="n">8</span>In code</h2><button class="copy" data-id="code">Copy link</button></div>
+<div class="sec-head"><h2><span class="n">12</span>In code</h2><button class="copy" data-id="code">Copy link</button></div>
 <p class="lead">The core of <code>rectify.py</code>. Here H maps straight to top-view pixels, so the mm from the json are multiplied by 10.</p>
 <pre class="code"><code>import json
 import cv2
@@ -109,6 +161,47 @@ H, _ = cv2.findHomography(src, dst * 10)
 
 # 4. warp the whole photo into the top view: 210 x 297 mm = 2100 x 2970 px
 top = cv2.warpPerspective(img, H, (2100, 2970))</code></pre>
+<p class="lead" style="margin-top:24px">The core of <code>measure.py</code> (sections 8–10), on the top view <code>top</code>.</p>
+<pre class="code"><code>gray = cv2.cvtColor(top, cv2.COLOR_BGR2GRAY)
+
+# 8. segmentation: screw = 255, paper = 0
+blur = cv2.GaussianBlur(gray, (5, 5), 0)
+T, mask = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))       # ≈ 0.7 mm
+mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+
+# 9. one contour per screw, drop dust
+contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+contours = [c for c in contours if cv2.contourArea(c) &gt;= 200]       # 2 mm²
+
+for c in contours:
+    # 10a. rotate so the long side of the box is horizontal
+    rect = cv2.minAreaRect(c)
+    box = cv2.boxPoints(rect)
+    edges = [box[(i + 1) % 4] - box[i] for i in range(4)]
+    dx, dy = max(edges, key=np.linalg.norm)
+    angle = np.degrees(np.arctan2(dy, dx))
+    one = np.zeros_like(mask)
+    cv2.drawContours(one, [c], -1, 255, cv2.FILLED)
+    R = cv2.getRotationMatrix2D(rect[0], angle, 1.0)
+    rot = cv2.warpAffine(one, R, one.shape[::-1], flags=cv2.INTER_NEAREST)
+
+    # 10b. thickness profile: white pixels per column
+    prof = np.count_nonzero(rot, axis=0)
+    prof = prof[prof &gt; 0]
+    n = len(prof)
+
+    # 10c. head side and head end
+    k = max(1, n // 6)
+    if prof[-k:].mean() &gt; prof[:k].mean():
+        prof = prof[::-1]                                                # head on the left
+    med = np.median(prof[int(0.4 * n):int(0.9 * n)])
+    thick = np.nonzero(prof[:int(0.4 * n)] &gt; 1.25 * med)[0]
+    head_end = thick[-1] + 1 if len(thick) else 0
+
+    # 10d. length and diameter, 10 px = 1 mm
+    L = n / 10
+    D = np.percentile(prof[head_end:int(0.95 * n)], 95) / 10</code></pre>
 </section>
 <footer>Sheet layout as in sheet.pdf (A4, 40 mm ArUco markers at 10 mm from the edges). Every visualization runs in the browser on a synthetic photo and works offline.</footer>
 </main></div>
